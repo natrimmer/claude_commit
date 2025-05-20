@@ -1,16 +1,6 @@
 # Claude Commit
 
-A beautiful CLI tool that uses the Claude API to generate Git commit messages based on your staged changes.
-
-![Claude Commit CLI Tool](https://placeholder-for-screenshot.png)
-
-## Features
-
-- Terminal UI with [Lip Gloss](https://github.com/charmbracelet/lipgloss)
-- Powered by Claude AI to generate meaningful commit messages
-- Simple configuration for your API key and preferred model
-- Analyzes your staged git changes to create contextual commit messages
-- Zero external dependencies for the core functionality
+A simple CLI tool that uses the Claude API to generate Git commit messages from staged changes.
 
 ## Installation
 
@@ -28,7 +18,7 @@ go build
 
 ## Usage
 
-### 1. Configure the tool with your Anthropic API key
+### 1. Configure with your API key
 
 ```bash
 claude_commit config -api-key "your-api-key" -model "claude-3-haiku-20240307"
@@ -38,43 +28,51 @@ Available models:
 
 - `claude-3-7-sonnet-20250219`
 - `claude-3-5-sonnet-20241022`
-- `claude-3-5-haiku-20241022`
 - `claude-3-opus-20240229`
-- `claude-3-sonnet-20240229`
 - `claude-3-haiku-20240307`
 
-### 2. Generate a commit message based on staged changes
-
-First, stage your changes using `git add`:
+### 2. View current configuration
 
 ```bash
-git add .
+claude_commit view
 ```
 
-Then generate a commit message:
+Output:
+
+```
+Current Configuration:
+┌─────────────────────────────────┐
+│ API Key: abcd****wxyz           │
+│ Model: claude-3-haiku-20240307  │
+└─────────────────────────────────┘
+```
+
+### 3. Generate a commit message
 
 ```bash
-claude_commit commit
+git add .                # Stage your changes
+claude_commit commit     # Generate a commit message
 ```
 
-The tool will analyze your changes and generate a commit message:
+Output:
 
 ```
 ✓ Commit message generated
-┌────────────────────────────────────────────────────────────────────────────┐
-│ git commit -m "Add user authentication and password reset functionality"    │
-└────────────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────┐
+│ git commit -m "Add user authentication and password reset functionality" │
+└──────────────────────────────────────────────────────────────────────────┘
 ```
-
-You can then execute this command directly.
 
 ## How It Works
 
-1. The tool reads your Anthropic API key and model preference from the config
-2. When generating a commit message, it runs `git diff --staged` to get your staged changes
-3. It sends this diff to the Anthropic API with a prompt to generate a concise commit message
-4. The tool outputs the commit command with the generated message in a visually appealing format
+1. Reads your Anthropic API key from config
+2. Gets staged changes with `git diff --staged`
+3. Sends the diff to Claude API
+4. Returns a formatted git commit command
 
-## License
+## Features
 
-MIT
+- Zero dependencies - pure Go standard library
+- Simple configuration with view option
+- API key stored securely with masking for display
+- Colorized terminal output
