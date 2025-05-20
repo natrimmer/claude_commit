@@ -1,6 +1,16 @@
 # Claude Commit
 
-A simple CLI tool that uses the Claude API to generate Git commit messages based on your staged changes.
+A beautiful CLI tool that uses the Claude API to generate Git commit messages based on your staged changes.
+
+![Claude Commit CLI Tool](https://placeholder-for-screenshot.png)
+
+## Features
+
+- Terminal UI with [Lip Gloss](https://github.com/charmbracelet/lipgloss)
+- Powered by Claude AI to generate meaningful commit messages
+- Simple configuration for your API key and preferred model
+- Analyzes your staged git changes to create contextual commit messages
+- Zero external dependencies for the core functionality
 
 ## Installation
 
@@ -47,10 +57,13 @@ Then generate a commit message:
 claude_commit commit
 ```
 
-This will output a suggested git commit command with a generated message:
+The tool will analyze your changes and generate a commit message:
 
 ```
-git commit -m "Add user authentication and password reset functionality"
+✓ Commit message generated
+┌────────────────────────────────────────────────────────────────────────────┐
+│ git commit -m "Add user authentication and password reset functionality"    │
+└────────────────────────────────────────────────────────────────────────────┘
 ```
 
 You can then execute this command directly.
@@ -60,4 +73,8 @@ You can then execute this command directly.
 1. The tool reads your Anthropic API key and model preference from the config
 2. When generating a commit message, it runs `git diff --staged` to get your staged changes
 3. It sends this diff to the Anthropic API with a prompt to generate a concise commit message
-4. The tool outputs the commit command with the generated message
+4. The tool outputs the commit command with the generated message in a visually appealing format
+
+## License
+
+MIT
