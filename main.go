@@ -62,21 +62,6 @@ type AnthropicResponse struct {
 	} `json:"content"`
 }
 
-// Extremely simple box - no dynamic sizing, just print the content with borders
-func drawBox(text string) string {
-	lines := strings.Split(text, "\n")
-
-	result := "╭───────────────────────────────────────────────────────────────────╮\n"
-
-	for _, line := range lines {
-		result += "│ " + line + "\n"
-	}
-
-	result += "╰───────────────────────────────────────────────────────────────────╯"
-
-	return result
-}
-
 func main() {
 	configCmd := flag.NewFlagSet("config", flag.ExitOnError)
 	apiKey := configCmd.String("api-key", "", "Anthropic API key")
@@ -90,12 +75,11 @@ func main() {
 		fmt.Println(Dim + Magenta + "Generate commit messages with Claude AI" + Reset)
 		fmt.Println(Dim + "Expected 'config', 'view' or 'commit' subcommands" + Reset)
 
-		// Show usage examples in a box
-		usageText := "Examples:\n" +
-			"  claude_commit config -api-key \"your-api-key\" -model \"claude-3-haiku-20240307\"\n" +
-			"  claude_commit view\n" +
-			"  claude_commit commit"
-		fmt.Println(drawBox(usageText))
+		// Show usage examples
+		fmt.Println("\n" + Bold + "Examples:" + Reset)
+		fmt.Println("  claude_commit config -api-key \"your-api-key\" -model \"claude-3-haiku-20240307\"")
+		fmt.Println("  claude_commit view")
+		fmt.Println("  claude_commit commit")
 		os.Exit(1)
 	}
 
@@ -164,21 +148,17 @@ func saveConfig(apiKey, model string) {
 		os.Exit(1)
 	}
 
-	// Create a nice success message with config details
-	configDetails := fmt.Sprintf("API Key: %s\nModel: %s", maskAPIKey(apiKey), model)
-
 	fmt.Println(Green + "Configuration saved successfully" + Reset)
-	fmt.Println(drawBox(configDetails))
+	fmt.Println(Bold + "API Key: " + Reset + maskAPIKey(apiKey))
+	fmt.Println(Bold + "Model: " + Reset + model)
 }
 
 func viewConfig() {
 	config := loadConfig()
 
-	// Display config details with masked API key
-	configDetails := fmt.Sprintf("API Key: %s\nModel: %s", maskAPIKey(config.ApiKey), config.Model)
-
 	fmt.Println(Bold + Cyan + "Current Configuration:" + Reset)
-	fmt.Println(drawBox(configDetails))
+	fmt.Println(Bold + "API Key: " + Reset + maskAPIKey(config.ApiKey))
+	fmt.Println(Bold + "Model: " + Reset + config.Model)
 }
 
 // maskAPIKey masks most of the API key for display purposes
@@ -246,7 +226,7 @@ func generateCommitMessage() {
 	gitCommand := fmt.Sprintf("git commit -m \"%s\"", commitMsg)
 
 	fmt.Println(Green + "✓ Commit message generated" + Reset)
-	fmt.Println(drawBox(Bold + Green + gitCommand + Reset))
+	fmt.Println(Bold + gitCommand + Reset)
 }
 
 func callAnthropicAPI(config Config, prompt string) string {

@@ -25,7 +25,6 @@ claude_commit config -api-key "your-api-key" -model "claude-3-haiku-20240307"
 ```
 
 Available models:
-
 - `claude-3-7-sonnet-20250219`
 - `claude-3-5-sonnet-20241022`
 - `claude-3-opus-20240229`
@@ -38,13 +37,10 @@ claude_commit view
 ```
 
 Output:
-
 ```
 Current Configuration:
-┌─────────────────────────────────┐
-│ API Key: abcd****wxyz           │
-│ Model: claude-3-haiku-20240307  │
-└─────────────────────────────────┘
+API Key: abcd****wxyz
+Model: claude-3-haiku-20240307
 ```
 
 ### 3. Generate a commit message
@@ -55,12 +51,10 @@ claude_commit commit     # Generate a commit message
 ```
 
 Output:
-
 ```
+⚙️  Analyzing git diff with Claude AI...
 ✓ Commit message generated
-┌──────────────────────────────────────────────────────────────────────────┐
-│ git commit -m "Add user authentication and password reset functionality" │
-└──────────────────────────────────────────────────────────────────────────┘
+git commit -m "Add user authentication and password reset functionality"
 ```
 
 ## How It Works
