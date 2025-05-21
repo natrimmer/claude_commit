@@ -41,9 +41,8 @@ const (
 )
 
 type Config struct {
-	ApiKey                 string `json:"api_key"`
-	Model                  string `json:"model"`
-	UseConventionalCommits bool   `json:"use_conventional_commits"`
+	ApiKey string `json:"api_key"`
+	Model  string `json:"model"`
 }
 
 type AnthropicRequest struct {
@@ -67,24 +66,23 @@ func main() {
 	configCmd := flag.NewFlagSet("config", flag.ExitOnError)
 	apiKey := configCmd.String("api-key", "", "Anthropic API key")
 	model := configCmd.String("model", "claude-3-haiku-20240307", "Anthropic model to use")
-	conventional := configCmd.Bool("conventional", false, "Use conventional commit format")
 
 	commitCmd := flag.NewFlagSet("commit", flag.ExitOnError)
 	viewCmd := flag.NewFlagSet("view", flag.ExitOnError)
 
 	if len(os.Args) < 2 {
 		fmt.Println(Bold + Magenta + "Claude Commit" + Reset)
-		fmt.Println(Dim + Magenta + "Generate commit messages with Claude AI" + Reset)
+		fmt.Println(Dim + Magenta + "Generate conventional commit messages with Anthropic's Claude" + Reset)
 		fmt.Println(Dim + "Expected 'config', 'view' or 'commit' subcommands" + Reset)
 
 		// Show usage examples
 		fmt.Println("\n" + Bold + "Examples:" + Reset)
-		fmt.Println("  claude_commit config -api-key \"your-api-key\" -model \"claude-3-haiku-20240307\" -conventional")
+		fmt.Println("  claude_commit config -api-key \"your-api-key\" -model \"claude-3-haiku-20240307\"")
 		fmt.Println("  claude_commit view")
 		fmt.Println("  claude_commit commit")
 
 		// Show conventional commit info
-		fmt.Println("\n" + Bold + "Conventional Commit Types:" + Reset)
+		fmt.Println("\n" + Bold + "Commit Types:" + Reset)
 		fmt.Println("  feat:     A new feature")
 		fmt.Println("  fix:      A bug fix")
 		fmt.Println("  docs:     Documentation changes")
@@ -106,7 +104,7 @@ func main() {
 			fmt.Println(Red + fmt.Sprintf("Error parsing config arguments: %v", err) + Reset)
 			os.Exit(1)
 		}
-		saveConfig(*apiKey, *model, *conventional)
+		saveConfig(*apiKey, *model)
 	case "view":
 		err := viewCmd.Parse(os.Args[2:])
 		if err != nil {
@@ -127,16 +125,15 @@ func main() {
 	}
 }
 
-func saveConfig(apiKey, model string, conventional bool) {
+func saveConfig(apiKey, model string) {
 	if apiKey == "" {
 		fmt.Println(Red + "API key is required" + Reset)
 		os.Exit(1)
 	}
 
 	config := Config{
-		ApiKey:                 apiKey,
-		Model:                  model,
-		UseConventionalCommits: conventional,
+		ApiKey: apiKey,
+		Model:  model,
 	}
 
 	homeDir, err := os.UserHomeDir()
@@ -168,7 +165,6 @@ func saveConfig(apiKey, model string, conventional bool) {
 	fmt.Println(Green + "Configuration saved successfully" + Reset)
 	fmt.Println(Bold + "API Key: " + Reset + maskAPIKey(apiKey))
 	fmt.Println(Bold + "Model: " + Reset + model)
-	fmt.Println(Bold + "Conventional Commits: " + Reset + fmt.Sprintf("%t", conventional))
 }
 
 func viewConfig() {
@@ -177,7 +173,6 @@ func viewConfig() {
 	fmt.Println(Bold + Cyan + "Current Configuration:" + Reset)
 	fmt.Println(Bold + "API Key: " + Reset + maskAPIKey(config.ApiKey))
 	fmt.Println(Bold + "Model: " + Reset + config.Model)
-	fmt.Println(Bold + "Conventional Commits: " + Reset + fmt.Sprintf("%t", config.UseConventionalCommits))
 }
 
 // maskAPIKey masks most of the API key for display purposes
@@ -249,9 +244,7 @@ func generateCommitMessage() {
 	// Show a nice "Thinking..." message
 	fmt.Println(Dim + "⚙️  Analyzing git diff with Claude AI..." + Reset)
 
-	var prompt string
-	if config.UseConventionalCommits {
-		prompt = `Generate a conventional commit message based on the following git diff.
+	prompt := `Generate a conventional commit message based on the following git diff.
 
 The message should follow this format: <type>: <description>
 
@@ -283,9 +276,6 @@ Here are the files changed:
 
 Here is the git diff:
 ` + diff
-	} else {
-		prompt = `Generate a concise and descriptive git commit message based on the following git diff.`
-	}
 
 	commitMsg := callAnthropicAPI(config, prompt)
 	commitMsg = strings.TrimSpace(commitMsg)
