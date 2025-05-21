@@ -4,11 +4,34 @@ A simple CLI tool that uses the Claude API to generate Git commit messages from 
 
 ## Installation
 
+### Option 1: Download binary
+
+Download the pre-built binary for your platform from the [GitHub Releases page](https://github.com/natrimmer/claude_commit/releases/latest):
+
+```bash
+# Example for Linux (amd64)
+curl -L https://github.com/natrimmer/claude_commit/releases/latest/download/claude_commit_linux_amd64 -o claude_commit
+chmod +x claude_commit
+sudo mv claude_commit /usr/local/bin/
+
+# Example for macOS (intel)
+curl -L https://github.com/natrimmer/claude_commit/releases/latest/download/claude_commit_darwin_amd64 -o claude_commit
+chmod +x claude_commit
+sudo mv claude_commit /usr/local/bin/
+
+# Example for macOS (Apple Silicon)
+curl -L https://github.com/natrimmer/claude_commit/releases/latest/download/claude_commit_darwin_arm64 -o claude_commit
+chmod +x claude_commit
+sudo mv claude_commit /usr/local/bin/
+```
+
+### Option 2: Using Go
+
 ```bash
 go install github.com/natrimmer/claude_commit@latest
 ```
 
-Or build from source:
+### Option 3: Build from source
 
 ```bash
 git clone https://github.com/natrimmer/claude_commit.git
@@ -95,7 +118,7 @@ git commit -m "feat: add user authentication and password reset functionality"
 
 ## Features
 
-- Zero dependencies - pure Go standard library
+- Zero dependencies
 - Follows commit message best practices
 - Uses conventional commit format
 - Configuration stored in `~/.claude-commit/config.json`
