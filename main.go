@@ -41,8 +41,9 @@ const (
 )
 
 type Config struct {
-	ApiKey string `json:"api_key"`
-	Model  string `json:"model"`
+	ApiKey                 string `json:"api_key"`
+	Model                  string `json:"model"`
+	UseConventionalCommits bool   `json:"use_conventional_commits"`
 }
 
 type AnthropicRequest struct {
@@ -66,6 +67,7 @@ func main() {
 	configCmd := flag.NewFlagSet("config", flag.ExitOnError)
 	apiKey := configCmd.String("api-key", "", "Anthropic API key")
 	model := configCmd.String("model", "claude-3-haiku-20240307", "Anthropic model to use")
+	conventional := configCmd.Bool("conventional", false, "Use conventional commit format")
 
 	commitCmd := flag.NewFlagSet("commit", flag.ExitOnError)
 	viewCmd := flag.NewFlagSet("view", flag.ExitOnError)
@@ -77,9 +79,20 @@ func main() {
 
 		// Show usage examples
 		fmt.Println("\n" + Bold + "Examples:" + Reset)
-		fmt.Println("  claude_commit config -api-key \"your-api-key\" -model \"claude-3-haiku-20240307\"")
+		fmt.Println("  claude_commit config -api-key \"your-api-key\" -model \"claude-3-haiku-20240307\" -conventional")
 		fmt.Println("  claude_commit view")
 		fmt.Println("  claude_commit commit")
+
+		// Show conventional commit info
+		fmt.Println("\n" + Bold + "Conventional Commit Types:" + Reset)
+		fmt.Println("  feat:     A new feature")
+		fmt.Println("  fix:      A bug fix")
+		fmt.Println("  docs:     Documentation changes")
+		fmt.Println("  style:    Code style changes (formatting, etc.)")
+		fmt.Println("  refactor: Code refactoring without changes to functionality")
+		fmt.Println("  perf:     Performance improvements")
+		fmt.Println("  test:     Adding or updating tests")
+		fmt.Println("  chore:    Maintenance tasks, dependency updates, etc.")
 		os.Exit(1)
 	}
 
@@ -90,7 +103,7 @@ func main() {
 			fmt.Println(Red + fmt.Sprintf("Error parsing config arguments: %v", err) + Reset)
 			os.Exit(1)
 		}
-		saveConfig(*apiKey, *model)
+		saveConfig(*apiKey, *model, *conventional)
 	case "view":
 		err := viewCmd.Parse(os.Args[2:])
 		if err != nil {
@@ -111,15 +124,16 @@ func main() {
 	}
 }
 
-func saveConfig(apiKey, model string) {
+func saveConfig(apiKey, model string, conventional bool) {
 	if apiKey == "" {
 		fmt.Println(Red + "API key is required" + Reset)
 		os.Exit(1)
 	}
 
 	config := Config{
-		ApiKey: apiKey,
-		Model:  model,
+		ApiKey:                 apiKey,
+		Model:                  model,
+		UseConventionalCommits: conventional,
 	}
 
 	homeDir, err := os.UserHomeDir()
@@ -151,6 +165,7 @@ func saveConfig(apiKey, model string) {
 	fmt.Println(Green + "Configuration saved successfully" + Reset)
 	fmt.Println(Bold + "API Key: " + Reset + maskAPIKey(apiKey))
 	fmt.Println(Bold + "Model: " + Reset + model)
+	fmt.Println(Bold + "Conventional Commits: " + Reset + fmt.Sprintf("%t", conventional))
 }
 
 func viewConfig() {
@@ -159,6 +174,7 @@ func viewConfig() {
 	fmt.Println(Bold + Cyan + "Current Configuration:" + Reset)
 	fmt.Println(Bold + "API Key: " + Reset + maskAPIKey(config.ApiKey))
 	fmt.Println(Bold + "Model: " + Reset + config.Model)
+	fmt.Println(Bold + "Conventional Commits: " + Reset + fmt.Sprintf("%t", config.UseConventionalCommits))
 }
 
 // maskAPIKey masks most of the API key for display purposes
@@ -205,9 +221,22 @@ func getGitDiff() string {
 	return out.String()
 }
 
+func getFileNames() string {
+	cmd := exec.Command("git", "diff", "--staged", "--name-only")
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	err := cmd.Run()
+	if err != nil {
+		fmt.Println(Red + fmt.Sprintf("Error getting changed files: %v", err) + Reset)
+		os.Exit(1)
+	}
+	return out.String()
+}
+
 func generateCommitMessage() {
 	config := loadConfig()
 	diff := getGitDiff()
+	files := getFileNames()
 
 	if strings.TrimSpace(diff) == "" {
 		fmt.Println(Yellow + "No staged changes found. Use git add to stage changes." + Reset)
@@ -217,7 +246,40 @@ func generateCommitMessage() {
 	// Show a nice "Thinking..." message
 	fmt.Println(Dim + "⚙️  Analyzing git diff with Claude AI..." + Reset)
 
-	prompt := "Generate a concise and descriptive git commit message based on the following git diff. Focus on what was changed and why, and limit the message to a single line less than 72 characters:\n\n" + diff
+	var prompt string
+	if config.UseConventionalCommits {
+		prompt = `Generate a conventional commit message based on the following git diff.
+
+The message should follow this format: <type>: <description>
+
+Types include:
+- feat: A new feature
+- fix: A bug fix
+- docs: Documentation changes
+- style: Code style changes (formatting, etc.)
+- refactor: Code refactoring without changes to functionality
+- perf: Performance improvements
+- test: Adding or updating tests
+- chore: Maintenance tasks, dependency updates, etc.
+
+Guidelines:
+1. Use the imperative mood ("Add feature" not "Added feature")
+2. Capitalize the first word
+3. No period at the end
+4. Be concise but descriptive (what was changed and why)
+5. Maximum 50 characters
+6. Answer the questions:
+   - What was changed?
+   - Why was it changed?
+
+Here are the files changed:
+` + files + `
+
+Here is the git diff:
+` + diff
+	} else {
+		prompt = `Generate a concise and descriptive git commit message based on the following git diff.`
+	}
 
 	commitMsg := callAnthropicAPI(config, prompt)
 	commitMsg = strings.TrimSpace(commitMsg)
