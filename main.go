@@ -93,6 +93,9 @@ func main() {
 		fmt.Println("  perf:     Performance improvements")
 		fmt.Println("  test:     Adding or updating tests")
 		fmt.Println("  chore:    Maintenance tasks, dependency updates, etc.")
+		fmt.Println("  ci:       Continuous integration changes")
+		fmt.Println("  build:    Changes that affect the build system or external dependencies")
+		fmt.Println("  revert:   Reverts a previous commit")
 		os.Exit(1)
 	}
 
@@ -261,10 +264,13 @@ Types include:
 - perf: Performance improvements
 - test: Adding or updating tests
 - chore: Maintenance tasks, dependency updates, etc.
+- ci: Continuous integration changes
+- build: Changes that affect the build system or external dependencies
+- revert: Reverts a previous commit
 
 Guidelines:
 1. Use the imperative mood ("Add feature" not "Added feature")
-2. Capitalize the first word
+2. All lowercase characters
 3. No period at the end
 4. Be concise but descriptive (what was changed and why)
 5. Maximum 50 characters
