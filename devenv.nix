@@ -107,6 +107,108 @@
       ./claude_commit --version
       ./claude_commit --help
     '';
+
+    major.exec = ''
+      # Check if working directory is clean
+      if [ -n "$(git status --porcelain)" ]; then
+        echo "Error: Working directory is not clean. Please commit or stash changes first."
+        exit 1
+      fi
+
+      # Get current version
+      CURRENT_VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+      echo "Current version: $CURRENT_VERSION"
+
+      # Parse version and increment major
+      NEW_VERSION=$(echo "$CURRENT_VERSION" | sed -E 's/^v?([0-9]+)\.([0-9]+)\.([0-9]+).*/v\1.\2.\3/' | awk -F. '{print "v" ($1+1) ".0.0"}' | sed 's/^vv/v/')
+      echo "New version: $NEW_VERSION"
+
+      # Prompt for confirmation
+      echo ""
+      echo "This will create and push tag '$NEW_VERSION' which will trigger a release build."
+      printf "Continue? (y/N): "
+      read -r CONFIRM
+      case "$CONFIRM" in
+        [yY]|[yY][eE][sS])
+          echo "Creating and pushing tag..."
+          git tag "$NEW_VERSION"
+          git push origin "$NEW_VERSION"
+          echo "Tagged and pushed $NEW_VERSION"
+          ;;
+        *)
+          echo "Cancelled."
+          exit 0
+          ;;
+      esac
+    '';
+
+    minor.exec = ''
+      # Check if working directory is clean
+      if [ -n "$(git status --porcelain)" ]; then
+        echo "Error: Working directory is not clean. Please commit or stash changes first."
+        exit 1
+      fi
+
+      # Get current version
+      CURRENT_VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+      echo "Current version: $CURRENT_VERSION"
+
+      # Parse version and increment minor
+      NEW_VERSION=$(echo "$CURRENT_VERSION" | sed -E 's/^v?([0-9]+)\.([0-9]+)\.([0-9]+).*/v\1.\2.\3/' | awk -F. '{print "v" $1 "." ($2+1) ".0"}' | sed 's/^vv/v/')
+      echo "New version: $NEW_VERSION"
+
+      # Prompt for confirmation
+      echo ""
+      echo "This will create and push tag '$NEW_VERSION' which will trigger a release build."
+      printf "Continue? (y/N): "
+      read -r CONFIRM
+      case "$CONFIRM" in
+        [yY]|[yY][eE][sS])
+          echo "Creating and pushing tag..."
+          git tag "$NEW_VERSION"
+          git push origin "$NEW_VERSION"
+          echo "Tagged and pushed $NEW_VERSION"
+          ;;
+        *)
+          echo "Cancelled."
+          exit 0
+          ;;
+      esac
+    '';
+
+    patch.exec = ''
+      # Check if working directory is clean
+      if [ -n "$(git status --porcelain)" ]; then
+        echo "Error: Working directory is not clean. Please commit or stash changes first."
+        exit 1
+      fi
+
+      # Get current version
+      CURRENT_VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+      echo "Current version: $CURRENT_VERSION"
+
+      # Parse version and increment patch
+      NEW_VERSION=$(echo "$CURRENT_VERSION" | sed -E 's/^v?([0-9]+)\.([0-9]+)\.([0-9]+).*/v\1.\2.\3/' | awk -F. '{print "v" $1 "." $2 "." ($3+1)}' | sed 's/^vv/v/')
+      echo "New version: $NEW_VERSION"
+
+      # Prompt for confirmation
+      echo ""
+      echo "This will create and push tag '$NEW_VERSION' which will trigger a release build."
+      printf "Continue? (y/N): "
+      read -r CONFIRM
+      case "$CONFIRM" in
+        [yY]|[yY][eE][sS])
+          echo "Creating and pushing tag..."
+          git tag "$NEW_VERSION"
+          git push origin "$NEW_VERSION"
+          echo "Tagged and pushed $NEW_VERSION"
+          ;;
+        *)
+          echo "Cancelled."
+          exit 0
+          ;;
+      esac
+    '';
   };
 
   enterShell = ''
@@ -125,6 +227,11 @@
     echo "  version        - Show version info"
     echo "  clean          - Clean build artifacts"
     echo "  ci             - Run all CI checks"
+    echo ""
+    echo "Version management:"
+    echo "  major          - Increment major version (X.0.0)"
+    echo "  minor          - Increment minor version (x.Y.0)"
+    echo "  patch          - Increment patch version (x.y.Z)"
     echo ""
   '';
 
