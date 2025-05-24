@@ -40,6 +40,7 @@ const (
 	BgWhite   = "\033[47m"
 )
 
+// Domain types
 type Config struct {
 	ApiKey string `json:"api_key"`
 	Model  string `json:"model"`
@@ -62,82 +63,104 @@ type AnthropicResponse struct {
 	} `json:"content"`
 }
 
-func main() {
-	configCmd := flag.NewFlagSet("config", flag.ExitOnError)
-	apiKey := configCmd.String("api-key", "", "Anthropic API key")
-	model := configCmd.String("model", "claude-3-7-sonnet-latest", "Anthropic model to use")
-
-	commitCmd := flag.NewFlagSet("commit", flag.ExitOnError)
-	viewCmd := flag.NewFlagSet("view", flag.ExitOnError)
-	modelsCmd := flag.NewFlagSet("models", flag.ExitOnError)
-
-	if len(os.Args) < 2 {
-		fmt.Println(Bold + Magenta + "Claude Commit" + Reset)
-		fmt.Println(Dim + Magenta + "Generate conventional commit messages with Anthropic's Claude" + Reset)
-		fmt.Println(Dim + "Expected 'config', 'view', 'commit', or 'models' subcommands" + Reset)
-
-		// Show usage examples
-		fmt.Println("\n" + Bold + "Examples:" + Reset)
-		fmt.Println("  claude_commit config -api-key \"your-api-key\" -model \"claude-3-haiku-20240307\"")
-		fmt.Println("  claude_commit view")
-		fmt.Println("  claude_commit models")
-		fmt.Println("  claude_commit commit")
-
-		// Show conventional commit info
-		fmt.Println("\n" + Bold + "Commit Types:" + Reset)
-		fmt.Println("  feat:     A new feature")
-		fmt.Println("  fix:      A bug fix")
-		fmt.Println("  docs:     Documentation changes")
-		fmt.Println("  style:    Code style changes (formatting, etc.)")
-		fmt.Println("  refactor: Code refactoring without changes to functionality")
-		fmt.Println("  perf:     Performance improvements")
-		fmt.Println("  test:     Adding or updating tests")
-		fmt.Println("  chore:    Maintenance tasks, dependency updates, etc.")
-		fmt.Println("  ci:       Continuous integration changes")
-		fmt.Println("  build:    Changes that affect the build system or external dependencies")
-		fmt.Println("  revert:   Reverts a previous commit")
-		os.Exit(1)
-	}
-
-	switch os.Args[1] {
-	case "config":
-		err := configCmd.Parse(os.Args[2:])
-		if err != nil {
-			fmt.Println(Red + fmt.Sprintf("Error parsing config arguments: %v", err) + Reset)
-			os.Exit(1)
-		}
-		saveConfig(*apiKey, *model)
-	case "view":
-		err := viewCmd.Parse(os.Args[2:])
-		if err != nil {
-			fmt.Println(Red + fmt.Sprintf("Error parsing view arguments: %v", err) + Reset)
-			os.Exit(1)
-		}
-		viewConfig()
-	case "models":
-		err := modelsCmd.Parse(os.Args[2:])
-		if err != nil {
-			fmt.Println(Red + fmt.Sprintf("Error parsing models arguments: %v", err) + Reset)
-			os.Exit(1)
-		}
-		showModels()
-	case "commit":
-		err := commitCmd.Parse(os.Args[2:])
-		if err != nil {
-			fmt.Println(Red + fmt.Sprintf("Error parsing commit arguments: %v", err) + Reset)
-			os.Exit(1)
-		}
-		generateCommitMessage()
-	default:
-		fmt.Println(Red + "Expected 'config', 'view' or 'commit' subcommands" + Reset)
-		os.Exit(1)
-	}
+// Interfaces for dependency injection
+type FileSystem interface {
+	UserHomeDir() (string, error)
+	MkdirAll(path string, perm os.FileMode) error
+	WriteFile(filename string, data []byte, perm os.FileMode) error
+	ReadFile(filename string) ([]byte, error)
 }
 
-func saveConfig(apiKey, model string) {
+type HTTPClient interface {
+	Do(req *http.Request) (*http.Response, error)
+}
+
+type GitClient interface {
+	GetStagedDiff() (string, error)
+	GetStagedFiles() (string, error)
+}
+
+type Printer interface {
+	Print(msg string)
+	PrintSuccess(msg string)
+	PrintError(msg string)
+	PrintWarning(msg string)
+}
+
+// Real implementations
+type RealFileSystem struct{}
+
+func (fs *RealFileSystem) UserHomeDir() (string, error) {
+	return os.UserHomeDir()
+}
+
+func (fs *RealFileSystem) MkdirAll(path string, perm os.FileMode) error {
+	return os.MkdirAll(path, perm)
+}
+
+func (fs *RealFileSystem) WriteFile(filename string, data []byte, perm os.FileMode) error {
+	return os.WriteFile(filename, data, perm)
+}
+
+func (fs *RealFileSystem) ReadFile(filename string) ([]byte, error) {
+	return os.ReadFile(filename)
+}
+
+type RealGitClient struct{}
+
+func (gc *RealGitClient) GetStagedDiff() (string, error) {
+	cmd := exec.Command("git", "diff", "--staged")
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	err := cmd.Run()
+	if err != nil {
+		return "", fmt.Errorf("error running git diff: %w", err)
+	}
+	return out.String(), nil
+}
+
+func (gc *RealGitClient) GetStagedFiles() (string, error) {
+	cmd := exec.Command("git", "diff", "--staged", "--name-only")
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	err := cmd.Run()
+	if err != nil {
+		return "", fmt.Errorf("error getting changed files: %w", err)
+	}
+	return out.String(), nil
+}
+
+type ConsolePrinter struct{}
+
+func (p *ConsolePrinter) Print(msg string) {
+	fmt.Println(msg)
+}
+
+func (p *ConsolePrinter) PrintSuccess(msg string) {
+	fmt.Println(Green + msg + Reset)
+}
+
+func (p *ConsolePrinter) PrintError(msg string) {
+	fmt.Println(Red + msg + Reset)
+}
+
+func (p *ConsolePrinter) PrintWarning(msg string) {
+	fmt.Println(Yellow + msg + Reset)
+}
+
+// Services
+type ConfigService struct {
+	fs      FileSystem
+	printer Printer
+}
+
+func NewConfigService(fs FileSystem, printer Printer) *ConfigService {
+	return &ConfigService{fs: fs, printer: printer}
+}
+
+func (cs *ConfigService) SaveConfig(apiKey, model string) error {
 	if apiKey == "" {
-		fmt.Println(Red + "API key is required" + Reset)
-		os.Exit(1)
+		return fmt.Errorf("API key is required")
 	}
 
 	config := Config{
@@ -145,132 +168,236 @@ func saveConfig(apiKey, model string) {
 		Model:  model,
 	}
 
-	homeDir, err := os.UserHomeDir()
+	homeDir, err := cs.fs.UserHomeDir()
 	if err != nil {
-		fmt.Println(Red + fmt.Sprintf("Error getting home directory: %v", err) + Reset)
-		os.Exit(1)
+		return fmt.Errorf("error getting home directory: %w", err)
 	}
 
 	configDir := filepath.Join(homeDir, ".claude-commit")
-	err = os.MkdirAll(configDir, 0755)
+	err = cs.fs.MkdirAll(configDir, 0755)
 	if err != nil {
-		fmt.Println(Red + fmt.Sprintf("Error creating config directory: %v", err) + Reset)
-		os.Exit(1)
+		return fmt.Errorf("error creating config directory: %w", err)
 	}
 
 	configFile := filepath.Join(configDir, "config.json")
 	data, err := json.MarshalIndent(config, "", "  ")
 	if err != nil {
-		fmt.Println(Red + fmt.Sprintf("Error marshaling config: %v", err) + Reset)
-		os.Exit(1)
+		return fmt.Errorf("error marshaling config: %w", err)
 	}
 
-	err = os.WriteFile(configFile, data, 0644)
+	err = cs.fs.WriteFile(configFile, data, 0644)
 	if err != nil {
-		fmt.Println(Red + fmt.Sprintf("Error writing config file: %v", err) + Reset)
-		os.Exit(1)
+		return fmt.Errorf("error writing config file: %w", err)
 	}
 
-	fmt.Println(Green + "Configuration saved successfully" + Reset)
-	fmt.Println(Bold + "API Key: " + Reset + maskAPIKey(apiKey))
-	fmt.Println(Bold + "Model: " + Reset + model)
+	cs.printer.PrintSuccess("Configuration saved successfully")
+	cs.printer.Print(Bold + "API Key: " + Reset + MaskAPIKey(apiKey))
+	cs.printer.Print(Bold + "Model: " + Reset + model)
+
+	return nil
 }
 
-func viewConfig() {
-	config := loadConfig()
-
-	fmt.Println(Bold + Cyan + "Current Configuration:" + Reset)
-	fmt.Println(Bold + "API Key: " + Reset + maskAPIKey(config.ApiKey))
-	fmt.Println(Bold + "Model: " + Reset + config.Model)
-}
-
-func showModels() {
-	config := loadConfig()
-	models := [6]string{"claude-opus-4-0", "claude-sonnet-4-0", "claude-3-7-sonnet-latest", "claude-3-5-sonnet-latest", "claude-3-5-haiku-latest", "claude-3-opus-latest"}
-
-	fmt.Println(Bold + Cyan + "Available Models:" + Reset)
-	for _, model := range models {
-		switch model {
-		case config.Model:
-			fmt.Println(Bold + Green + model + " [CURRENT]" + Reset)
-		case "claude-3-7-sonnet-latest":
-			fmt.Println(Bold + model + " [DEFAULT]" + Reset)
-		default:
-			fmt.Println(Bold + model + Reset)
-		}
-	}
-}
-
-// maskAPIKey masks most of the API key for display purposes
-func maskAPIKey(apiKey string) string {
-	if len(apiKey) <= 8 {
-		return "********"
-	}
-	return apiKey[:4] + "****" + apiKey[len(apiKey)-4:]
-}
-
-func loadConfig() Config {
-	homeDir, err := os.UserHomeDir()
+func (cs *ConfigService) LoadConfig() (*Config, error) {
+	homeDir, err := cs.fs.UserHomeDir()
 	if err != nil {
-		fmt.Println(Red + fmt.Sprintf("Error getting home directory: %v", err) + Reset)
-		os.Exit(1)
+		return nil, fmt.Errorf("error getting home directory: %w", err)
 	}
 
 	configFile := filepath.Join(homeDir, ".claude-commit", "config.json")
-	data, err := os.ReadFile(configFile)
+	data, err := cs.fs.ReadFile(configFile)
 	if err != nil {
-		fmt.Println(Red + fmt.Sprintf("Error reading config file: %v\nPlease run 'config' first", err) + Reset)
-		os.Exit(1)
+		return nil, fmt.Errorf("error reading config file: %w\nPlease run 'config' first", err)
 	}
 
 	var config Config
 	err = json.Unmarshal(data, &config)
 	if err != nil {
-		fmt.Println(Red + fmt.Sprintf("Error parsing config file: %v", err) + Reset)
-		os.Exit(1)
+		return nil, fmt.Errorf("error parsing config file: %w", err)
 	}
 
-	return config
+	return &config, nil
 }
 
-func getGitDiff() string {
-	cmd := exec.Command("git", "diff", "--staged")
-	var out bytes.Buffer
-	cmd.Stdout = &out
-	err := cmd.Run()
+func (cs *ConfigService) ViewConfig() error {
+	config, err := cs.LoadConfig()
 	if err != nil {
-		fmt.Println(Red + fmt.Sprintf("Error running git diff: %v", err) + Reset)
-		os.Exit(1)
+		return err
 	}
-	return out.String()
+
+	cs.printer.Print(Bold + Cyan + "Current Configuration:" + Reset)
+	cs.printer.Print(Bold + "API Key: " + Reset + MaskAPIKey(config.ApiKey))
+	cs.printer.Print(Bold + "Model: " + Reset + config.Model)
+
+	return nil
 }
 
-func getFileNames() string {
-	cmd := exec.Command("git", "diff", "--staged", "--name-only")
-	var out bytes.Buffer
-	cmd.Stdout = &out
-	err := cmd.Run()
+type ModelService struct {
+	configService *ConfigService
+	printer       Printer
+}
+
+func NewModelService(configService *ConfigService, printer Printer) *ModelService {
+	return &ModelService{
+		configService: configService,
+		printer:       printer,
+	}
+}
+
+var AvailableModels = []string{
+	"claude-opus-4-0",
+	"claude-sonnet-4-0",
+	"claude-3-7-sonnet-latest",
+	"claude-3-5-sonnet-latest",
+	"claude-3-5-haiku-latest",
+	"claude-3-opus-latest",
+}
+
+const DefaultModel = "claude-3-7-sonnet-latest"
+
+func (ms *ModelService) ShowModels() error {
+	config, err := ms.configService.LoadConfig()
 	if err != nil {
-		fmt.Println(Red + fmt.Sprintf("Error getting changed files: %v", err) + Reset)
-		os.Exit(1)
+		return err
 	}
-	return out.String()
+
+	ms.printer.Print(Bold + Cyan + "Available Models:" + Reset)
+	for _, model := range AvailableModels {
+		switch model {
+		case config.Model:
+			ms.printer.Print(Bold + Green + model + " [CURRENT]" + Reset)
+		case DefaultModel:
+			ms.printer.Print(Bold + model + " [DEFAULT]" + Reset)
+		default:
+			ms.printer.Print(Bold + model + Reset)
+		}
+	}
+
+	return nil
 }
 
-func generateCommitMessage() {
-	config := loadConfig()
-	diff := getGitDiff()
-	files := getFileNames()
+type AnthropicService struct {
+	client  HTTPClient
+	printer Printer
+}
+
+func NewAnthropicService(client HTTPClient, printer Printer) *AnthropicService {
+	return &AnthropicService{
+		client:  client,
+		printer: printer,
+	}
+}
+
+func (as *AnthropicService) GenerateCommitMessage(config Config, prompt string) (string, error) {
+	requestBody := AnthropicRequest{
+		Model: config.Model,
+		Messages: []Message{
+			{
+				Role:    "user",
+				Content: prompt,
+			},
+		},
+		MaxTokens: 100,
+	}
+
+	jsonBody, err := json.Marshal(requestBody)
+	if err != nil {
+		return "", fmt.Errorf("error creating request: %w", err)
+	}
+
+	req, err := http.NewRequest("POST", "https://api.anthropic.com/v1/messages", bytes.NewBuffer(jsonBody))
+	if err != nil {
+		return "", fmt.Errorf("error creating request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("x-api-key", config.ApiKey)
+	req.Header.Set("anthropic-version", "2023-06-01")
+
+	resp, err := as.client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("error making API call: %w", err)
+	}
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			as.printer.PrintError(fmt.Sprintf("Error closing response body: %v", err))
+		}
+	}()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("API error (status %d): %s", resp.StatusCode, body)
+	}
+
+	var anthropicResp AnthropicResponse
+	err = json.NewDecoder(resp.Body).Decode(&anthropicResp)
+	if err != nil {
+		return "", fmt.Errorf("error parsing API response: %w", err)
+	}
+
+	if len(anthropicResp.Content) == 0 {
+		return "", fmt.Errorf("empty response from API")
+	}
+
+	return anthropicResp.Content[0].Text, nil
+}
+
+type CommitService struct {
+	configService    *ConfigService
+	anthropicService *AnthropicService
+	gitClient        GitClient
+	printer          Printer
+}
+
+func NewCommitService(configService *ConfigService, anthropicService *AnthropicService, gitClient GitClient, printer Printer) *CommitService {
+	return &CommitService{
+		configService:    configService,
+		anthropicService: anthropicService,
+		gitClient:        gitClient,
+		printer:          printer,
+	}
+}
+
+func (cs *CommitService) GenerateCommitMessage() error {
+	config, err := cs.configService.LoadConfig()
+	if err != nil {
+		return err
+	}
+
+	diff, err := cs.gitClient.GetStagedDiff()
+	if err != nil {
+		return err
+	}
+
+	files, err := cs.gitClient.GetStagedFiles()
+	if err != nil {
+		return err
+	}
 
 	if strings.TrimSpace(diff) == "" {
-		fmt.Println(Yellow + "No staged changes found. Use git add to stage changes." + Reset)
-		os.Exit(1)
+		return fmt.Errorf("no staged changes found. Use git add to stage changes")
 	}
 
-	// Show a nice "Thinking..." message
-	fmt.Println(Dim + "⚙️  Analyzing git diff with Claude AI..." + Reset)
+	cs.printer.Print(Dim + "⚙️  Analyzing git diff with Claude AI..." + Reset)
 
-	prompt := `Generate a conventional commit message based on the following git diff.
+	prompt := cs.buildPrompt(files, diff)
+
+	commitMsg, err := cs.anthropicService.GenerateCommitMessage(*config, prompt)
+	if err != nil {
+		return err
+	}
+
+	commitMsg = strings.TrimSpace(commitMsg)
+	gitCommand := fmt.Sprintf("git commit -m \"%s\"", commitMsg)
+
+	cs.printer.PrintSuccess("✓ Commit message generated")
+	cs.printer.Print("")
+	cs.printer.Print(Bold + gitCommand + Reset)
+
+	return nil
+}
+
+func (cs *CommitService) buildPrompt(files, diff string) string {
+	return fmt.Sprintf(`Generate a conventional commit message based on the following git diff.
 
 The message should follow this format: <type>: <description>
 
@@ -295,79 +422,149 @@ Guidelines:
 5. Maximum 50 characters
 
 Here are the files changed:
-` + files + `
+%s
 
 Here is the git diff:
-` + diff
-
-	commitMsg := callAnthropicAPI(config, prompt)
-	commitMsg = strings.TrimSpace(commitMsg)
-
-	// Format the final command nicely
-	gitCommand := fmt.Sprintf("git commit -m \"%s\"", commitMsg)
-
-	fmt.Println(Green + "✓ Commit message generated" + Reset)
-	fmt.Println()
-	fmt.Println(Bold + gitCommand + Reset)
+%s`, files, diff)
 }
 
-func callAnthropicAPI(config Config, prompt string) string {
-	requestBody := AnthropicRequest{
-		Model: config.Model,
-		Messages: []Message{
-			{
-				Role:    "user",
-				Content: prompt,
-			},
-		},
-		MaxTokens: 100,
+// Utility functions
+func MaskAPIKey(apiKey string) string {
+	if len(apiKey) <= 8 {
+		return "********"
 	}
+	return apiKey[:4] + "****" + apiKey[len(apiKey)-4:]
+}
 
-	jsonBody, err := json.Marshal(requestBody)
-	if err != nil {
-		fmt.Println(Red + fmt.Sprintf("Error creating request: %v", err) + Reset)
+// App struct to hold all dependencies
+type App struct {
+	configService    *ConfigService
+	modelService     *ModelService
+	commitService    *CommitService
+	anthropicService *AnthropicService
+	printer          Printer
+}
+
+func NewApp() *App {
+	// Real dependencies
+	fs := &RealFileSystem{}
+	httpClient := &http.Client{}
+	gitClient := &RealGitClient{}
+	printer := &ConsolePrinter{}
+
+	// Services
+	configService := NewConfigService(fs, printer)
+	anthropicService := NewAnthropicService(httpClient, printer)
+	modelService := NewModelService(configService, printer)
+	commitService := NewCommitService(configService, anthropicService, gitClient, printer)
+
+	return &App{
+		configService:    configService,
+		modelService:     modelService,
+		commitService:    commitService,
+		anthropicService: anthropicService,
+		printer:          printer,
+	}
+}
+
+// Command handlers
+func (app *App) HandleConfig(apiKey, model string) error {
+	return app.configService.SaveConfig(apiKey, model)
+}
+
+func (app *App) HandleView() error {
+	return app.configService.ViewConfig()
+}
+
+func (app *App) HandleModels() error {
+	return app.modelService.ShowModels()
+}
+
+func (app *App) HandleCommit() error {
+	return app.commitService.GenerateCommitMessage()
+}
+
+func (app *App) ShowHelp() {
+	app.printer.Print(Bold + Magenta + "Claude Commit" + Reset)
+	app.printer.Print(Dim + Magenta + "Generate conventional commit messages with Anthropic's Claude" + Reset)
+	app.printer.Print(Dim + "Expected 'config', 'view', 'commit', or 'models' subcommands" + Reset)
+
+	// Show usage examples
+	app.printer.Print("\n" + Bold + "Examples:" + Reset)
+	app.printer.Print("  claude_commit config -api-key \"your-api-key\" -model \"claude-3-haiku-20240307\"")
+	app.printer.Print("  claude_commit view")
+	app.printer.Print("  claude_commit models")
+	app.printer.Print("  claude_commit commit")
+
+	// Show conventional commit info
+	app.printer.Print("\n" + Bold + "Commit Types:" + Reset)
+	app.printer.Print("  feat:     A new feature")
+	app.printer.Print("  fix:      A bug fix")
+	app.printer.Print("  docs:     Documentation changes")
+	app.printer.Print("  style:    Code style changes (formatting, etc.)")
+	app.printer.Print("  refactor: Code refactoring without changes to functionality")
+	app.printer.Print("  perf:     Performance improvements")
+	app.printer.Print("  test:     Adding or updating tests")
+	app.printer.Print("  chore:    Maintenance tasks, dependency updates, etc.")
+	app.printer.Print("  ci:       Continuous integration changes")
+	app.printer.Print("  build:    Changes that affect the build system or external dependencies")
+	app.printer.Print("  revert:   Reverts a previous commit")
+}
+
+func main() {
+	app := NewApp()
+
+	configCmd := flag.NewFlagSet("config", flag.ExitOnError)
+	apiKey := configCmd.String("api-key", "", "Anthropic API key")
+	model := configCmd.String("model", DefaultModel, "Anthropic model to use")
+
+	commitCmd := flag.NewFlagSet("commit", flag.ExitOnError)
+	viewCmd := flag.NewFlagSet("view", flag.ExitOnError)
+	modelsCmd := flag.NewFlagSet("models", flag.ExitOnError)
+
+	if len(os.Args) < 2 {
+		app.ShowHelp()
 		os.Exit(1)
 	}
 
-	req, err := http.NewRequest("POST", "https://api.anthropic.com/v1/messages", bytes.NewBuffer(jsonBody))
-	if err != nil {
-		fmt.Println(Red + fmt.Sprintf("Error creating request: %v", err) + Reset)
-		os.Exit(1)
-	}
+	var err error
 
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("x-api-key", config.ApiKey)
-	req.Header.Set("anthropic-version", "2023-06-01")
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		fmt.Println(Red + fmt.Sprintf("Error making API call: %v", err) + Reset)
-		os.Exit(1)
-	}
-	defer func() {
-		if err := resp.Body.Close(); err != nil {
-			fmt.Println(Red + fmt.Sprintf("Error closing response body: %v", err) + Reset)
+	switch os.Args[1] {
+	case "config":
+		err = configCmd.Parse(os.Args[2:])
+		if err != nil {
+			app.printer.PrintError(fmt.Sprintf("Error parsing config arguments: %v", err))
+			os.Exit(1)
 		}
-	}()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		fmt.Println(Red + fmt.Sprintf("API error (status %d): %s", resp.StatusCode, body) + Reset)
+		err = app.HandleConfig(*apiKey, *model)
+	case "view":
+		err = viewCmd.Parse(os.Args[2:])
+		if err != nil {
+			app.printer.PrintError(fmt.Sprintf("Error parsing view arguments: %v", err))
+			os.Exit(1)
+		}
+		err = app.HandleView()
+	case "models":
+		err = modelsCmd.Parse(os.Args[2:])
+		if err != nil {
+			app.printer.PrintError(fmt.Sprintf("Error parsing models arguments: %v", err))
+			os.Exit(1)
+		}
+		err = app.HandleModels()
+	case "commit":
+		err = commitCmd.Parse(os.Args[2:])
+		if err != nil {
+			app.printer.PrintError(fmt.Sprintf("Error parsing commit arguments: %v", err))
+			os.Exit(1)
+		}
+		err = app.HandleCommit()
+	default:
+		app.printer.PrintError("Expected 'config', 'view', 'commit', or 'models' subcommands")
 		os.Exit(1)
 	}
 
-	var anthropicResp AnthropicResponse
-	err = json.NewDecoder(resp.Body).Decode(&anthropicResp)
 	if err != nil {
-		fmt.Println(Red + fmt.Sprintf("Error parsing API response: %v", err) + Reset)
+		app.printer.PrintError(err.Error())
 		os.Exit(1)
 	}
-
-	if len(anthropicResp.Content) == 0 {
-		fmt.Println(Red + "Empty response from API" + Reset)
-		os.Exit(1)
-	}
-
-	return anthropicResp.Content[0].Text
 }
