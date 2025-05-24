@@ -262,14 +262,11 @@ Types include:
 - revert: Reverts a previous commit
 
 Guidelines:
-1. Use the imperative mood ("Add feature" not "Added feature")
+1. Use the imperative mood ("add feature" not "Added feature")
 2. All lowercase characters
 3. No period at the end
 4. Be concise but descriptive (what was changed and why)
 5. Maximum 50 characters
-6. Answer the questions:
-   - What was changed?
-   - Why was it changed?
 
 Here are the files changed:
 ` + files + `
@@ -284,6 +281,7 @@ Here is the git diff:
 	gitCommand := fmt.Sprintf("git commit -m \"%s\"", commitMsg)
 
 	fmt.Println(Green + "✓ Commit message generated" + Reset)
+	fmt.Println()
 	fmt.Println(Bold + gitCommand + Reset)
 }
 

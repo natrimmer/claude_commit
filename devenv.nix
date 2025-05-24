@@ -28,7 +28,11 @@
   '';
 
   enterShell = ''
+    echo ""
+    echo ""
     hello
+    echo ""
+    echo ""
   '';
 
   enterTest = ''
