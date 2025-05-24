@@ -13,6 +13,13 @@ import (
 	"strings"
 )
 
+// Version information - can be set at build time with ldflags
+var (
+	version   = "v0.0.0-dev" // Default SemVer version for development builds
+	buildDate = "unknown"    // Build date
+	commitSHA = "unknown"    // Git commit SHA
+)
+
 // ANSI color codes
 const (
 	Reset     = "\033[0m"
@@ -480,21 +487,45 @@ func (app *App) HandleModels() error {
 	return app.modelService.ShowModels()
 }
 
+func (app *App) HandleHelp() {
+	app.ShowHelp()
+}
+
 func (app *App) HandleCommit() error {
 	return app.commitService.GenerateCommitMessage()
 }
 
+func (app *App) ShowVersion() {
+	app.printer.Print(Bold + Magenta + "Claude Commit" + Reset + " " + Dim + version + Reset)
+	if version != "v0.0.0-dev" {
+		app.printer.Print(Dim + "Build Date: " + buildDate + Reset)
+		app.printer.Print(Dim + "Commit: " + commitSHA + Reset)
+	}
+	app.printer.Print(Dim + "Generate conventional commit messages with Anthropic's Claude" + Reset)
+}
+
 func (app *App) ShowHelp() {
-	app.printer.Print(Bold + Magenta + "Claude Commit" + Reset)
+	app.printer.Print(Bold + Magenta + "Claude Commit" + Reset + " " + Dim + version + Reset)
 	app.printer.Print(Dim + Magenta + "Generate conventional commit messages with Anthropic's Claude" + Reset)
-	app.printer.Print(Dim + "Expected 'config', 'view', 'commit', or 'models' subcommands" + Reset)
+	app.printer.Print("")
+	app.printer.Print(Bold + "Commands:" + Reset)
+	app.printer.Print("  config    Configure API key and model")
+	app.printer.Print("  view      View current configuration")
+	app.printer.Print("  models    List available models")
+	app.printer.Print("  commit    Generate commit message")
+	app.printer.Print("  help      Show this help message")
+	app.printer.Print("")
+	app.printer.Print(Bold + "Flags:" + Reset)
+	app.printer.Print("  --version, -v    Show version information")
+	app.printer.Print("  --help, -h       Show this help message")
 
 	// Show usage examples
 	app.printer.Print("\n" + Bold + "Examples:" + Reset)
-	app.printer.Print("  claude_commit config -api-key \"your-api-key\" -model \"claude-3-haiku-20240307\"")
+	app.printer.Print("  claude_commit config -api-key \"your-api-key\" -model \"claude-3-7-sonnet-latest\"")
 	app.printer.Print("  claude_commit view")
 	app.printer.Print("  claude_commit models")
 	app.printer.Print("  claude_commit commit")
+	app.printer.Print("  claude_commit --version")
 
 	// Show conventional commit info
 	app.printer.Print("\n" + Bold + "Commit Types:" + Reset)
@@ -514,6 +545,18 @@ func (app *App) ShowHelp() {
 func main() {
 	app := NewApp()
 
+	// Handle global flags first
+	if len(os.Args) >= 2 {
+		switch os.Args[1] {
+		case "--version", "-v":
+			app.ShowVersion()
+			return
+		case "--help", "-h":
+			app.ShowHelp()
+			return
+		}
+	}
+
 	configCmd := flag.NewFlagSet("config", flag.ExitOnError)
 	apiKey := configCmd.String("api-key", "", "Anthropic API key")
 	model := configCmd.String("model", DefaultModel, "Anthropic model to use")
@@ -521,10 +564,12 @@ func main() {
 	commitCmd := flag.NewFlagSet("commit", flag.ExitOnError)
 	viewCmd := flag.NewFlagSet("view", flag.ExitOnError)
 	modelsCmd := flag.NewFlagSet("models", flag.ExitOnError)
+	helpCmd := flag.NewFlagSet("help", flag.ExitOnError)
 
+	// If no arguments provided, show help instead of error
 	if len(os.Args) < 2 {
 		app.ShowHelp()
-		os.Exit(1)
+		return
 	}
 
 	var err error
@@ -558,8 +603,16 @@ func main() {
 			os.Exit(1)
 		}
 		err = app.HandleCommit()
+	case "help":
+		err = helpCmd.Parse(os.Args[2:])
+		if err != nil {
+			app.printer.PrintError(fmt.Sprintf("Error parsing help arguments: %v", err))
+			os.Exit(1)
+		}
+		app.HandleHelp()
+		return // Help doesn't return an error
 	default:
-		app.printer.PrintError("Expected 'config', 'view', 'commit', or 'models' subcommands")
+		app.printer.PrintError(fmt.Sprintf("Unknown command '%s'. Use 'help' to see available commands.", os.Args[1]))
 		os.Exit(1)
 	}
 

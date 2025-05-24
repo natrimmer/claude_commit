@@ -75,7 +75,11 @@ jobs:
         env:
           GOOS: ${{ matrix.os }}
           GOARCH: ${{ matrix.arch }}
-        run: go build -o ${{ matrix.artifact_name }} -v ./...
+        run: |
+          VERSION=${{ github.ref_name }}
+          BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          COMMIT_SHA=${{ github.sha }}
+          go build -ldflags "-w -s -X main.version=$VERSION -X main.buildDate=$BUILD_DATE -X main.commitSHA=$COMMIT_SHA" -o ${{ matrix.artifact_name }} .
 
       - name: Upload Release Asset
         uses: actions/upload-release-asset@v1

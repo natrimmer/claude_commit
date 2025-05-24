@@ -776,6 +776,91 @@ func TestApp_HandleConfig(t *testing.T) {
 	}
 }
 
+// Test version functionality
+func TestApp_ShowVersion(t *testing.T) {
+	// Test with default "v0.0.0-dev" version
+	mockPrinter := &MockPrinter{}
+	app := &App{printer: mockPrinter}
+
+	app.ShowVersion()
+
+	messages := mockPrinter.GetMessages()
+	if len(messages) == 0 {
+		t.Error("Expected version messages, got none")
+	}
+
+	// Should contain "Claude Commit" and version
+	found := false
+	for _, msg := range messages {
+		if strings.Contains(msg, "Claude Commit") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("Expected 'Claude Commit' in version output")
+	}
+
+	// Should contain the SemVer version
+	foundVersion := false
+	for _, msg := range messages {
+		if strings.Contains(msg, "v0.0.0-dev") {
+			foundVersion = true
+			break
+		}
+	}
+	if !foundVersion {
+		t.Error("Expected SemVer version 'v0.0.0-dev' in version output")
+	}
+}
+
+// Test help functionality
+func TestApp_ShowHelp(t *testing.T) {
+	mockPrinter := &MockPrinter{}
+	app := &App{printer: mockPrinter}
+
+	app.ShowHelp()
+
+	messages := mockPrinter.GetMessages()
+	if len(messages) == 0 {
+		t.Error("Expected help messages, got none")
+	}
+
+	// Check for expected sections
+	expectedSections := []string{
+		"Claude Commit",
+		"Commands:",
+		"config",
+		"view",
+		"models",
+		"commit",
+		"help",
+		"Flags:",
+		"--version",
+		"--help",
+		"Examples:",
+		"Commit Types:",
+	}
+
+	for _, expected := range expectedSections {
+		if !mockPrinter.ContainsMessage(expected) {
+			t.Errorf("Expected help to contain section: %q", expected)
+		}
+	}
+}
+
+func TestApp_HandleHelp(t *testing.T) {
+	mockPrinter := &MockPrinter{}
+	app := &App{printer: mockPrinter}
+
+	app.HandleHelp()
+
+	// Should call ShowHelp which prints help messages
+	if len(mockPrinter.GetMessages()) == 0 {
+		t.Error("Expected help messages from HandleHelp")
+	}
+}
+
 // Test prompt building
 func TestCommitService_buildPrompt(t *testing.T) {
 	service := &CommitService{}
@@ -878,6 +963,40 @@ func TestConstants(t *testing.T) {
 		if !found {
 			t.Errorf("Expected model %q not found in AvailableModels", expected)
 		}
+	}
+}
+
+// Test version variables
+func TestVersionVariables(t *testing.T) {
+	// Test that version variables are properly defined
+	if version == "" {
+		t.Error("version variable should not be empty")
+	}
+
+	if buildDate == "" {
+		t.Error("buildDate variable should not be empty")
+	}
+
+	if commitSHA == "" {
+		t.Error("commitSHA variable should not be empty")
+	}
+
+	// Test SemVer default values
+	if version != "v0.0.0-dev" {
+		t.Logf("Note: version is set to %q (not default 'v0.0.0-dev')", version)
+	}
+
+	if buildDate != "unknown" {
+		t.Logf("Note: buildDate is set to %q (not default 'unknown')", buildDate)
+	}
+
+	if commitSHA != "unknown" {
+		t.Logf("Note: commitSHA is set to %q (not default 'unknown')", commitSHA)
+	}
+
+	// Test SemVer format validation
+	if !strings.HasPrefix(version, "v") {
+		t.Errorf("Version should follow SemVer format and start with 'v', got: %q", version)
 	}
 }
 

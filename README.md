@@ -1,6 +1,6 @@
 # Claude Commit
 
-A simple CLI tool that uses the Claude API to generate Git commit messages from staged changes, following best practices.
+A simple CLI tool that uses the Claude API to generate Git commit messages from staged changes, following conventional commit best practices.
 
 ## Installation
 
@@ -36,57 +36,115 @@ go install github.com/natrimmer/claude_commit@latest
 ```bash
 git clone https://github.com/natrimmer/claude_commit.git
 cd claude_commit
-go build
+build  # or: go build
 ```
 
-## Usage
-
-### 1. Configure with your API key
+## Quick Start
 
 ```bash
-claude_commit config -api-key "your-api-key" -model "claude-3-haiku-20240307"
+# Get help
+claude_commit
+# or
+claude_commit --help
+
+# Check version
+claude_commit --version
+
+# Configure
+claude_commit config -api-key "your-api-key"
+
+# Generate commit message
+git add .
+claude_commit commit
 ```
 
-Available models:
+## Commands
 
-- `claude-opus-4-0`
-- `claude-sonnet-4-0`
-- `claude-3-7-sonnet-latest`
-- `claude-3-5-sonnet-latest`
-- `claude-3-5-haiku-latest`
-- `claude-3-opus-latest`
-
-### 2. View current configuration
+### Help and Version
 
 ```bash
+claude_commit              # Show help
+claude_commit --help       # Show help
+claude_commit help         # Show help
+claude_commit --version    # Show version info
+```
+
+### Configuration
+
+```bash
+# Configure with your API key (uses claude-3-7-sonnet-latest by default)
+claude_commit config -api-key "your-api-key"
+
+# Configure with specific model
+claude_commit config -api-key "your-api-key" -model "claude-3-5-sonnet-latest"
+
+# View current configuration
 claude_commit view
+
+# List available models
+claude_commit models
 ```
 
-Output:
-
-```
-Current Configuration:
-API Key: abcd****wxyz
-Model: claude-3-haiku-20240307
-```
-
-### Configuration Storage
-
-Your configuration is stored in a JSON file at `~/.claude-commit/config.json`. The API key is stored in plaintext, so ensure appropriate file permissions are set.
-
-### 3. Generate a commit message
+### Generate Commit Messages
 
 ```bash
 git add .                # Stage your changes
 claude_commit commit     # Generate a commit message
 ```
 
-Output:
+## Available Models
 
+- `claude-opus-4-0` - Most capable, slower and more expensive
+- `claude-sonnet-4-0` - Balanced performance and speed  
+- `claude-3-7-sonnet-latest` - **Default** - Fast and efficient
+- `claude-3-5-sonnet-latest` - Previous generation, reliable
+- `claude-3-5-haiku-latest` - Fastest and most cost-effective
+- `claude-3-opus-latest` - Previous generation, most capable
+
+## Example Usage
+
+### Configuration
+
+```bash
+$ claude_commit config -api-key "sk-ant-api03-..." -model "claude-3-7-sonnet-latest"
+Configuration saved successfully
+API Key: sk-a****...
+Model: claude-3-7-sonnet-latest
+
+$ claude_commit view
+Current Configuration:
+API Key: sk-a****...
+Model: claude-3-7-sonnet-latest
+
+$ claude_commit models
+Available Models:
+claude-opus-4-0
+claude-sonnet-4-0
+claude-3-7-sonnet-latest [CURRENT]
+claude-3-5-sonnet-latest
+claude-3-5-haiku-latest
+claude-3-opus-latest
 ```
+
+### Generating Commits
+
+```bash
+$ git add .
+$ claude_commit commit
 ⚙️  Analyzing git diff with Claude AI...
 ✓ Commit message generated
+
 git commit -m "feat: add user authentication and password reset functionality"
+```
+
+### Version Information
+
+```bash
+$ claude_commit --version
+Claude Commit v1.2.3
+Build Date: 2024-01-15T10:30:00Z
+Commit: abc1234
+Generate conventional commit messages with Anthropic's Claude
 ```
 
 ## Commit Message Format
@@ -118,11 +176,91 @@ git commit -m "feat: add user authentication and password reset functionality"
 3. Sends the diff and detailed prompt to Claude API
 4. Returns a formatted git commit command
 
+## Configuration Storage
+
+Your configuration is stored in a JSON file at `~/.claude-commit/config.json`. The API key is stored in plaintext, so ensure appropriate file permissions are set.
+
 ## Features
 
 - Zero dependencies
-- Follows commit message best practices
+- Follows conventional commit best practices
 - Uses conventional commit format
 - Configuration stored in `~/.claude-commit/config.json`
-- API key stored with masking for display
+- API key masking for display security
 - Colorized terminal output
+- Version information with build details
+- Comprehensive help system
+- Multiple model support with easy switching
+- Clean error handling and user feedback
+
+## Development
+
+### Building from Source
+
+```bash
+git clone https://github.com/natrimmer/claude_commit.git
+cd claude_commit
+
+# The devenv environment provides all necessary tools
+# Install dependencies are handled automatically by devenv
+
+# Run tests
+test
+
+# Build with version info
+build
+
+# Build release version
+build-release
+
+# Run all quality checks
+ci
+```
+
+### Available Commands
+
+When you enter the devenv shell, you'll have access to these commands:
+
+- `build` - Build with version info
+- `build-release` - Build optimized release binary
+- `test` - Run tests
+- `test-coverage` - Run tests with coverage
+- `test-race` - Run tests with race detection
+- `bench` - Run benchmark tests
+- `lint` - Run linter
+- `fmt` - Format code
+- `vet` - Run go vet
+- `version` - Show version information
+- `clean` - Clean build artifacts
+- `ci` - Run all CI checks
+
+### Version Management
+
+This project uses **Semantic Versioning (SemVer)**. Versions are managed through git tags:
+
+```bash
+# Create a new version tag
+git tag v1.2.3
+git push origin v1.2.3
+
+# Build will automatically use the tag
+build
+./claude_commit --version  # Shows: Claude Commit v1.2.3
+```
+
+### Development Workflow
+
+```bash
+# Enter the development environment
+cd claude_commit  # devenv activates automatically with direnv
+
+# Make changes, then test
+fmt      # Format code
+lint     # Check for issues
+test     # Run tests
+ci       # Run full CI suite
+
+# Build and test
+build
+./claude_commit --version
+```
