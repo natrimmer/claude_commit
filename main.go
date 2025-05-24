@@ -65,20 +65,22 @@ type AnthropicResponse struct {
 func main() {
 	configCmd := flag.NewFlagSet("config", flag.ExitOnError)
 	apiKey := configCmd.String("api-key", "", "Anthropic API key")
-	model := configCmd.String("model", "claude-3-haiku-20240307", "Anthropic model to use")
+	model := configCmd.String("model", "claude-3-7-sonnet-latest", "Anthropic model to use")
 
 	commitCmd := flag.NewFlagSet("commit", flag.ExitOnError)
 	viewCmd := flag.NewFlagSet("view", flag.ExitOnError)
+	modelsCmd := flag.NewFlagSet("models", flag.ExitOnError)
 
 	if len(os.Args) < 2 {
 		fmt.Println(Bold + Magenta + "Claude Commit" + Reset)
 		fmt.Println(Dim + Magenta + "Generate conventional commit messages with Anthropic's Claude" + Reset)
-		fmt.Println(Dim + "Expected 'config', 'view' or 'commit' subcommands" + Reset)
+		fmt.Println(Dim + "Expected 'config', 'view', 'commit', or 'models' subcommands" + Reset)
 
 		// Show usage examples
 		fmt.Println("\n" + Bold + "Examples:" + Reset)
 		fmt.Println("  claude_commit config -api-key \"your-api-key\" -model \"claude-3-haiku-20240307\"")
 		fmt.Println("  claude_commit view")
+		fmt.Println("  claude_commit models")
 		fmt.Println("  claude_commit commit")
 
 		// Show conventional commit info
@@ -112,6 +114,13 @@ func main() {
 			os.Exit(1)
 		}
 		viewConfig()
+	case "models":
+		err := modelsCmd.Parse(os.Args[2:])
+		if err != nil {
+			fmt.Println(Red + fmt.Sprintf("Error parsing models arguments: %v", err) + Reset)
+			os.Exit(1)
+		}
+		showModels()
 	case "commit":
 		err := commitCmd.Parse(os.Args[2:])
 		if err != nil {
@@ -173,6 +182,23 @@ func viewConfig() {
 	fmt.Println(Bold + Cyan + "Current Configuration:" + Reset)
 	fmt.Println(Bold + "API Key: " + Reset + maskAPIKey(config.ApiKey))
 	fmt.Println(Bold + "Model: " + Reset + config.Model)
+}
+
+func showModels() {
+	config := loadConfig()
+	models := [6]string{"claude-opus-4-0", "claude-sonnet-4-0", "claude-3-7-sonnet-latest", "claude-3-5-sonnet-latest", "claude-3-5-haiku-latest", "claude-3-opus-latest"}
+
+	fmt.Println(Bold + Cyan + "Available Models:" + Reset)
+	for _, model := range models {
+		switch model {
+		case config.Model:
+			fmt.Println(Bold + Green + model + " [CURRENT]" + Reset)
+		case "claude-3-7-sonnet-latest":
+			fmt.Println(Bold + model + " [DEFAULT]" + Reset)
+		default:
+			fmt.Println(Bold + model + Reset)
+		}
+	}
 }
 
 // maskAPIKey masks most of the API key for display purposes
