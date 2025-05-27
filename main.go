@@ -166,13 +166,31 @@ func NewConfigService(fs FileSystem, printer Printer) *ConfigService {
 }
 
 func (cs *ConfigService) SaveConfig(apiKey, model string) error {
-	if apiKey == "" {
-		return fmt.Errorf("API key is required")
+	// Load existing config if it exists
+	existingConfig, _ := cs.LoadConfig()
+
+	// Start with existing config or create new one
+	config := Config{
+		ApiKey: "",
+		Model:  DefaultModel,
 	}
 
-	config := Config{
-		ApiKey: apiKey,
-		Model:  model,
+	if existingConfig != nil {
+		config = *existingConfig
+	}
+
+	// Update only the fields that were provided
+	if apiKey != "" {
+		config.ApiKey = apiKey
+	}
+
+	if model != "" {
+		config.Model = model
+	}
+
+	// Validate that we have an API key (either from existing config or new input)
+	if config.ApiKey == "" {
+		return fmt.Errorf("API key is required. Use -api-key flag to set it")
 	}
 
 	homeDir, err := cs.fs.UserHomeDir()
@@ -198,8 +216,8 @@ func (cs *ConfigService) SaveConfig(apiKey, model string) error {
 	}
 
 	cs.printer.PrintSuccess("Configuration saved successfully")
-	cs.printer.Print(Bold + "API Key: " + Reset + MaskAPIKey(apiKey))
-	cs.printer.Print(Bold + "Model: " + Reset + model)
+	cs.printer.Print(Bold + "API Key: " + Reset + MaskAPIKey(config.ApiKey))
+	cs.printer.Print(Bold + "Model: " + Reset + config.Model)
 
 	return nil
 }
@@ -504,6 +522,31 @@ func (app *App) ShowVersion() {
 	app.printer.Print(Dim + "Generate conventional commit messages with Anthropic's Claude" + Reset)
 }
 
+func (app *App) ShowConfigHelp() {
+	app.printer.Print(Bold + Magenta + "Claude Commit Config" + Reset)
+	app.printer.Print("Configure API key and model settings")
+	app.printer.Print("")
+	app.printer.Print(Bold + "Usage:" + Reset)
+	app.printer.Print("  claude_commit config [flags]")
+	app.printer.Print("")
+	app.printer.Print(Bold + "Flags:" + Reset)
+	app.printer.Print("  -api-key string   Anthropic API key")
+	app.printer.Print("  -model string     Anthropic model to use")
+	app.printer.Print("")
+	app.printer.Print(Bold + "Examples:" + Reset)
+	app.printer.Print("  # Initial setup (API key required)")
+	app.printer.Print("  claude_commit config -api-key \"sk-ant-api03-...\" -model \"claude-3-7-sonnet-latest\"")
+	app.printer.Print("")
+	app.printer.Print("  # Update only API key")
+	app.printer.Print("  claude_commit config -api-key \"sk-ant-api03-...\"")
+	app.printer.Print("")
+	app.printer.Print("  # Update only model")
+	app.printer.Print("  claude_commit config -model \"claude-3-5-sonnet-latest\"")
+	app.printer.Print("")
+	app.printer.Print("Use 'claude_commit view' to see current configuration")
+	app.printer.Print("Use 'claude_commit models' to see available models")
+}
+
 func (app *App) ShowHelp() {
 	app.printer.Print(Bold + Magenta + "Claude Commit" + Reset + " " + Dim + version + Reset)
 	app.printer.Print(Dim + Magenta + "Generate conventional commit messages with Anthropic's Claude" + Reset)
@@ -522,6 +565,8 @@ func (app *App) ShowHelp() {
 	// Show usage examples
 	app.printer.Print("\n" + Bold + "Examples:" + Reset)
 	app.printer.Print("  claude_commit config -api-key \"your-api-key\" -model \"claude-3-7-sonnet-latest\"")
+	app.printer.Print("  claude_commit config -api-key \"your-api-key\"  # Set only API key")
+	app.printer.Print("  claude_commit config -model \"claude-3-5-sonnet-latest\"  # Update only model")
 	app.printer.Print("  claude_commit view")
 	app.printer.Print("  claude_commit models")
 	app.printer.Print("  claude_commit commit")
@@ -576,6 +621,11 @@ func main() {
 
 	switch os.Args[1] {
 	case "config":
+		// If no arguments after 'config', show help
+		if len(os.Args) == 2 {
+			app.ShowConfigHelp()
+			return
+		}
 		err = configCmd.Parse(os.Args[2:])
 		if err != nil {
 			app.printer.PrintError(fmt.Sprintf("Error parsing config arguments: %v", err))

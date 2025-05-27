@@ -175,28 +175,75 @@ func TestMaskAPIKey(t *testing.T) {
 // Test ConfigService
 func TestConfigService_SaveConfig(t *testing.T) {
 	tests := []struct {
-		name        string
-		apiKey      string
-		model       string
-		setupMock   func(*MockFileSystem)
-		expectError bool
-		errorMsg    string
+		name           string
+		apiKey         string
+		model          string
+		existingConfig *Config
+		setupMock      func(*MockFileSystem)
+		expectError    bool
+		errorMsg       string
+		expectedConfig *Config
 	}{
 		{
-			name:   "successful save",
+			name:   "successful save with both parameters",
 			apiKey: "test-api-key",
 			model:  "test-model",
 			setupMock: func(fs *MockFileSystem) {
 				fs.homeDir = "/tmp"
 			},
 			expectError: false,
+			expectedConfig: &Config{
+				ApiKey: "test-api-key",
+				Model:  "test-model",
+			},
 		},
 		{
-			name:   "empty API key",
+			name:   "update only API key",
+			apiKey: "new-api-key",
+			model:  "",
+			existingConfig: &Config{
+				ApiKey: "old-api-key",
+				Model:  "existing-model",
+			},
+			setupMock: func(fs *MockFileSystem) {
+				fs.homeDir = "/tmp"
+				config := Config{ApiKey: "old-api-key", Model: "existing-model"}
+				configJSON, _ := json.Marshal(config)
+				fs.readData = configJSON
+			},
+			expectError: false,
+			expectedConfig: &Config{
+				ApiKey: "new-api-key",
+				Model:  "existing-model",
+			},
+		},
+		{
+			name:   "update only model",
+			apiKey: "",
+			model:  "new-model",
+			existingConfig: &Config{
+				ApiKey: "existing-api-key",
+				Model:  "old-model",
+			},
+			setupMock: func(fs *MockFileSystem) {
+				fs.homeDir = "/tmp"
+				config := Config{ApiKey: "existing-api-key", Model: "old-model"}
+				configJSON, _ := json.Marshal(config)
+				fs.readData = configJSON
+			},
+			expectError: false,
+			expectedConfig: &Config{
+				ApiKey: "existing-api-key",
+				Model:  "new-model",
+			},
+		},
+		{
+			name:   "empty API key with no existing config",
 			apiKey: "",
 			model:  "test-model",
 			setupMock: func(fs *MockFileSystem) {
-				// No setup needed, validation happens first
+				fs.homeDir = "/tmp"
+				fs.readErr = errors.New("file not found")
 			},
 			expectError: true,
 			errorMsg:    "API key is required",
@@ -262,11 +309,13 @@ func TestConfigService_SaveConfig(t *testing.T) {
 					if err := json.Unmarshal(data, &config); err != nil {
 						t.Errorf("Failed to unmarshal written config: %v", err)
 					} else {
-						if config.ApiKey != tt.apiKey {
-							t.Errorf("Expected API key %q, got %q", tt.apiKey, config.ApiKey)
-						}
-						if config.Model != tt.model {
-							t.Errorf("Expected model %q, got %q", tt.model, config.Model)
+						if tt.expectedConfig != nil {
+							if config.ApiKey != tt.expectedConfig.ApiKey {
+								t.Errorf("Expected API key %q, got %q", tt.expectedConfig.ApiKey, config.ApiKey)
+							}
+							if config.Model != tt.expectedConfig.Model {
+								t.Errorf("Expected model %q, got %q", tt.expectedConfig.Model, config.Model)
+							}
 						}
 					}
 				} else {
@@ -729,19 +778,27 @@ func TestCommitService_GenerateCommitMessage(t *testing.T) {
 // Test App integration
 func TestApp_HandleConfig(t *testing.T) {
 	tests := []struct {
-		name      string
-		apiKey    string
-		model     string
-		expectErr bool
+		name           string
+		apiKey         string
+		model          string
+		existingConfig bool
+		expectErr      bool
 	}{
 		{
-			name:      "successful config",
+			name:      "successful config with both parameters",
 			apiKey:    "test-api-key",
 			model:     "test-model",
 			expectErr: false,
 		},
 		{
-			name:      "empty api key",
+			name:           "update only model with existing config",
+			apiKey:         "",
+			model:          "new-model",
+			existingConfig: true,
+			expectErr:      false,
+		},
+		{
+			name:      "empty api key without existing config",
 			apiKey:    "",
 			model:     "test-model",
 			expectErr: true,
@@ -754,6 +811,12 @@ func TestApp_HandleConfig(t *testing.T) {
 			mockFS := NewMockFileSystem()
 			mockFS.homeDir = "/tmp"
 			mockPrinter := &MockPrinter{}
+
+			if tt.existingConfig {
+				config := Config{ApiKey: "existing-api-key", Model: "existing-model"}
+				configJSON, _ := json.Marshal(config)
+				mockFS.readData = configJSON
+			}
 
 			configService := NewConfigService(mockFS, mockPrinter)
 			app := &App{
@@ -811,6 +874,42 @@ func TestApp_ShowVersion(t *testing.T) {
 	}
 	if !foundVersion {
 		t.Error("Expected SemVer version 'v0.0.0-dev' in version output")
+	}
+}
+
+// Test config help functionality
+func TestApp_ShowConfigHelp(t *testing.T) {
+	mockPrinter := &MockPrinter{}
+	app := &App{printer: mockPrinter}
+
+	app.ShowConfigHelp()
+
+	messages := mockPrinter.GetMessages()
+	if len(messages) == 0 {
+		t.Error("Expected config help messages, got none")
+	}
+
+	// Check for expected content
+	expectedContent := []string{
+		"Claude Commit Config",
+		"Configure API key and model settings",
+		"Usage:",
+		"claude_commit config [flags]",
+		"Flags:",
+		"-api-key string",
+		"-model string",
+		"Examples:",
+		"Initial setup",
+		"Update only API key",
+		"Update only model",
+		"claude_commit view",
+		"claude_commit models",
+	}
+
+	for _, expected := range expectedContent {
+		if !mockPrinter.ContainsMessage(expected) {
+			t.Errorf("Expected config help to contain: %q", expected)
+		}
 	}
 }
 
