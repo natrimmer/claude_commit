@@ -321,7 +321,7 @@ func (as *AnthropicService) GenerateCommitMessage(config Config, prompt string) 
 				Content: prompt,
 			},
 		},
-		MaxTokens: 100,
+		MaxTokens: 50,
 	}
 
 	jsonBody, err := json.Marshal(requestBody)
@@ -424,6 +424,8 @@ func (cs *CommitService) GenerateCommitMessage() error {
 func (cs *CommitService) buildPrompt(files, diff string) string {
 	return fmt.Sprintf(`Generate a conventional commit message based on the following git diff.
 
+IMPORTANT: Return ONLY the commit message, nothing else. No explanations, no analysis, no additional text.
+
 The message should follow this format: <type>: <description>
 
 Types include:
@@ -445,12 +447,15 @@ Guidelines:
 3. No period at the end
 4. Be concise but descriptive (what was changed and why)
 5. Maximum 50 characters
+6. Return ONLY the commit message, no other text
 
 Here are the files changed:
 %s
 
 Here is the git diff:
-%s`, files, diff)
+%s
+
+Commit message:`, files, diff)
 }
 
 // Utility functions
