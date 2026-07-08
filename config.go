@@ -10,10 +10,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const defaultModel = "claude-sonnet-4-6"
+const defaultModel = "claude-sonnet-5"
 
 var availableModels = []string{
 	"claude-opus-4-8",
+	"claude-sonnet-5",
 	"claude-sonnet-4-6",
 	"claude-haiku-4-5",
 }
