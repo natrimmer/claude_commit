@@ -45,16 +45,27 @@ func stagedFiles() (string, error) {
 
 type anthropicResponse struct {
 	Content []struct {
+		Type string `json:"type"`
 		Text string `json:"text"`
 	} `json:"content"`
 }
 
+// thinkingByDefault lists models that reason before answering unless told not
+// to. Writing a commit message needs no reasoning, and the thinking tokens
+// would come out of the same max_tokens budget as the message itself.
+var thinkingByDefault = []string{"claude-opus-5"}
+
 func generateCommitMessage(cfg Config, prompt string) (string, error) {
-	reqBody, err := json.Marshal(map[string]any{
+	payload := map[string]any{
 		"model":      cfg.Model,
 		"max_tokens": 1024, // ceiling billed on actual output; generous so --count doesn't truncate
 		"messages":   []map[string]string{{"role": "user", "content": prompt}},
-	})
+	}
+	if slices.Contains(thinkingByDefault, cfg.Model) {
+		payload["thinking"] = map[string]any{"type": "disabled"}
+	}
+
+	reqBody, err := json.Marshal(payload)
 	if err != nil {
 		return "", fmt.Errorf("error creating request: %w", err)
 	}
@@ -82,10 +93,14 @@ func generateCommitMessage(cfg Config, prompt string) (string, error) {
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
 		return "", fmt.Errorf("error parsing API response: %w", err)
 	}
-	if len(out.Content) == 0 {
-		return "", fmt.Errorf("empty response from API")
+	// Take the first block that carries text — models that think emit an
+	// empty-text thinking block ahead of the answer.
+	for _, block := range out.Content {
+		if block.Text != "" {
+			return block.Text, nil
+		}
 	}
-	return out.Content[0].Text, nil
+	return "", fmt.Errorf("empty response from API")
 }
 
 func buildPrompt(files, diff, commitType, context string, count int) string {

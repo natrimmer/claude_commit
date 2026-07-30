@@ -60,8 +60,10 @@ Other commands: `mango config show` (show config), `mango config models` (list m
 
 Set with `mango config set --model <name>`:
 
-- `claude-opus-4-8` — most capable, slower, pricier
-- `claude-sonnet-4-6` — **default**, balanced
+- `claude-opus-5` — most capable, slower, pricier
+- `claude-opus-4-8` — previous Opus
+- `claude-sonnet-5` — **default**, balanced
+- `claude-sonnet-4-6` — previous Sonnet
 - `claude-haiku-4-5` — fastest, cheapest
 
 <details>
