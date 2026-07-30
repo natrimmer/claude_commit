@@ -13,6 +13,7 @@ import (
 const defaultModel = "claude-sonnet-5"
 
 var availableModels = []string{
+	"claude-opus-5",
 	"claude-opus-4-8",
 	"claude-sonnet-5",
 	"claude-sonnet-4-6",

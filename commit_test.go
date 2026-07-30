@@ -67,6 +67,11 @@ func TestGenerateCommitMessage(t *testing.T) {
 		{"ok", 200, `{"content":[{"text":"feat: add thing"}]}`, "feat: add thing", ""},
 		{"api error", 401, `{"error":"unauthorized"}`, "", "API error"},
 		{"empty content", 200, `{"content":[]}`, "", "empty response"},
+		{
+			"skips thinking block", 200,
+			`{"content":[{"type":"thinking","thinking":"","text":""},{"type":"text","text":"fix: handle nil"}]}`,
+			"fix: handle nil", "",
+		},
 		{"bad json", 200, "not json", "", "error parsing"},
 	}
 	for _, tt := range tests {
@@ -117,5 +122,16 @@ func TestGenerateCommitMessage_RequestBody(t *testing.T) {
 	_, _ = generateCommitMessage(Config{ApiKey: "secret", Model: "claude-opus-4-8"}, "hello")
 	if seen["model"] != "claude-opus-4-8" {
 		t.Errorf("model not sent: %v", seen["model"])
+	}
+	if _, ok := seen["thinking"]; ok {
+		t.Errorf("thinking sent for a model that doesn't think by default")
+	}
+
+	// Models that think by default must be told not to, or the reasoning eats
+	// the max_tokens budget the commit message is supposed to fit in.
+	_, _ = generateCommitMessage(Config{ApiKey: "secret", Model: "claude-opus-5"}, "hello")
+	thinking, ok := seen["thinking"].(map[string]any)
+	if !ok || thinking["type"] != "disabled" {
+		t.Errorf("thinking not disabled for claude-opus-5: %v", seen["thinking"])
 	}
 }
