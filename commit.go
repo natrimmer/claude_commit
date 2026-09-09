@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -26,6 +27,9 @@ var conventionalTypes = []string{
 
 // apiURL is a var so tests can point it at a stub server.
 var apiURL = "https://api.anthropic.com/v1/messages"
+
+// claudeBin is a var so tests can point it at a stub executable.
+var claudeBin = "claude"
 
 func stagedDiff() (string, error) {
 	out, err := exec.Command("git", "diff", "--staged").Output()
@@ -56,6 +60,48 @@ type anthropicResponse struct {
 var thinkingByDefault = []string{"claude-opus-5"}
 
 func generateCommitMessage(cfg Config, prompt string) (string, error) {
+	if cfg.Provider == providerClaudeCode {
+		return generateViaClaudeCode(cfg, prompt)
+	}
+	return generateViaAPI(cfg, prompt)
+}
+
+// generateViaClaudeCode asks the locally installed claude CLI, which brings its
+// own credentials, so this path needs no API key.
+func generateViaClaudeCode(cfg Config, prompt string) (string, error) {
+	cmd := exec.Command(claudeBin, "-p", "--tools", "", "--model", cfg.Model, "--output-format", "text")
+	// A staged diff overruns argv limits, so the prompt goes in on stdin.
+	cmd.Stdin = strings.NewReader(prompt)
+	// Run outside the repo: its CLAUDE.md and hooks must not steer the message.
+	cmd.Dir = os.TempDir()
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &stdout, &stderr
+
+	if err := cmd.Run(); err != nil {
+		// A bare name misses on PATH; an explicit path misses on the filesystem.
+		if errors.Is(err, exec.ErrNotFound) || errors.Is(err, os.ErrNotExist) {
+			return "", fmt.Errorf("%q not found on PATH. Install Claude Code, or run: mango config set --provider api", claudeBin)
+		}
+		// Headless claude reports "Not logged in" and friends on stdout.
+		msg := strings.TrimSpace(stderr.String())
+		if msg == "" {
+			msg = strings.TrimSpace(stdout.String())
+		}
+		if msg != "" {
+			return "", fmt.Errorf("claude failed: %w: %s", err, msg)
+		}
+		return "", fmt.Errorf("claude failed: %w", err)
+	}
+
+	out := strings.TrimSpace(stdout.String())
+	if out == "" {
+		return "", fmt.Errorf("empty response from claude")
+	}
+	return out, nil
+}
+
+func generateViaAPI(cfg Config, prompt string) (string, error) {
 	payload := map[string]any{
 		"model":      cfg.Model,
 		"max_tokens": 1024, // ceiling billed on actual output; generous so --count doesn't truncate
@@ -219,7 +265,7 @@ func runCommit(commitType, context string, count int, dryRun, verbose, retry, ye
 		fmt.Println()
 	}
 	if dryRun {
-		printWarning("Dry run mode - API not called")
+		printWarning("Dry run mode - no message generated")
 		return nil
 	}
 
@@ -232,7 +278,7 @@ func runCommit(commitType, context string, count int, dryRun, verbose, retry, ye
 	msg = strings.TrimSpace(msg)
 
 	if verbose {
-		fmt.Println(Bold + Cyan + "Raw API Response:" + Reset)
+		fmt.Println(Bold + Cyan + "Raw response from " + cfg.Provider + ":" + Reset)
 		fmt.Println(Dim + divider + Reset)
 		fmt.Println(msg)
 		fmt.Println(Dim + divider + Reset)
@@ -381,9 +427,9 @@ func init() {
 	commitCmd.Flags().StringP("type", "t", "", "Commit type (feat, fix, docs, etc.)")
 	commitCmd.Flags().StringP("context", "c", "", "Additional context to guide generation")
 	commitCmd.Flags().IntP("count", "n", 1, "Number of commit message options to generate")
-	commitCmd.Flags().Bool("dry-run", false, "Show prompt without calling the API")
-	commitCmd.Flags().BoolP("verbose", "v", false, "Show prompt and full API interaction")
-	commitCmd.Flags().Bool("retry", false, "Recommit the last generated message without calling the API")
+	commitCmd.Flags().Bool("dry-run", false, "Show prompt without generating a message")
+	commitCmd.Flags().BoolP("verbose", "v", false, "Show prompt and raw model response")
+	commitCmd.Flags().Bool("retry", false, "Recommit the last generated message without regenerating")
 	commitCmd.Flags().BoolP("yes", "y", false, "Skip the retry confirmation prompt")
 	rootCmd.AddCommand(commitCmd)
 }

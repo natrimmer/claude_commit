@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -101,6 +104,66 @@ func TestGenerateCommitMessage(t *testing.T) {
 			}
 		})
 	}
+}
+
+// stubClaude installs a shell script standing in for the claude CLI, and points
+// claudeBin at it for the duration of the test.
+func stubClaude(t *testing.T, script string) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("shell script stub needs a POSIX shell")
+	}
+	path := filepath.Join(t.TempDir(), "claude")
+	if err := os.WriteFile(path, []byte("#!/bin/sh\n"+script+"\n"), 0o755); err != nil {
+		t.Fatalf("writing stub: %v", err)
+	}
+	old := claudeBin
+	claudeBin = path
+	t.Cleanup(func() { claudeBin = old })
+}
+
+func TestGenerateViaClaudeCode(t *testing.T) {
+	// Echo the flags and the stdin prompt back so both can be asserted on.
+	stubClaude(t, `printf '%s\n' "$*"; cat`)
+
+	got, err := generateCommitMessage(Config{Provider: providerClaudeCode, Model: "claude-opus-4-8"}, "the prompt")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	for _, want := range []string{"-p", "--tools", "--model claude-opus-4-8", "--output-format text", "the prompt"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("invocation missing %q, got %q", want, got)
+		}
+	}
+}
+
+func TestGenerateViaClaudeCode_Errors(t *testing.T) {
+	t.Run("non-zero exit", func(t *testing.T) {
+		stubClaude(t, `echo "credit balance too low" >&2; exit 1`)
+		_, err := generateCommitMessage(Config{Provider: providerClaudeCode, Model: defaultModel}, "p")
+		if err == nil || !strings.Contains(err.Error(), "credit balance too low") {
+			t.Fatalf("want stderr in error, got %v", err)
+		}
+	})
+
+	t.Run("empty output", func(t *testing.T) {
+		stubClaude(t, `exit 0`)
+		_, err := generateCommitMessage(Config{Provider: providerClaudeCode, Model: defaultModel}, "p")
+		if err == nil || !strings.Contains(err.Error(), "empty response") {
+			t.Fatalf("want empty response error, got %v", err)
+		}
+	})
+
+	t.Run("not installed", func(t *testing.T) {
+		old := claudeBin
+		claudeBin = filepath.Join(t.TempDir(), "no-such-claude")
+		defer func() { claudeBin = old }()
+
+		_, err := generateCommitMessage(Config{Provider: providerClaudeCode, Model: defaultModel}, "p")
+		if err == nil || !strings.Contains(err.Error(), "mango config set --provider api") {
+			t.Fatalf("want actionable not-found error, got %v", err)
+		}
+	})
 }
 
 // Guard the request shape the API depends on.

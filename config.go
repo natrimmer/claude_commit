@@ -6,11 +6,22 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
 
 const defaultModel = "claude-sonnet-5"
+
+// Providers are the two ways mango can reach a model: a direct API call with a
+// stored key, or the locally installed `claude` CLI in headless mode.
+const (
+	providerAPI        = "api"
+	providerClaudeCode = "claude-code"
+	defaultProvider    = providerAPI
+)
+
+var availableProviders = []string{providerAPI, providerClaudeCode}
 
 var availableModels = []string{
 	"claude-opus-5",
@@ -22,8 +33,9 @@ var availableModels = []string{
 
 // Config represents the application configuration.
 type Config struct {
-	ApiKey string `json:"api_key"`
-	Model  string `json:"model"`
+	Provider string `json:"provider"`
+	ApiKey   string `json:"api_key"`
+	Model    string `json:"model"`
 }
 
 func configPath() (string, error) {
@@ -41,20 +53,27 @@ func loadConfig() (*Config, error) {
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("error reading config file: %w\nRun: mango config set --api-key \"sk-ant-...\"", err)
+		return nil, fmt.Errorf("error reading config file: %w\nRun: mango config set --api-key \"sk-ant-...\"\nOr, to use the claude CLI: mango config set --provider claude-code", err)
 	}
 	var cfg Config
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("error parsing config file: %w", err)
 	}
+	// Configs written before providers existed carry no provider field.
+	if cfg.Provider == "" {
+		cfg.Provider = defaultProvider
+	}
 	return &cfg, nil
 }
 
 // saveConfig merges the provided fields over any existing config and writes it.
-func saveConfig(apiKey, model string) error {
-	cfg := Config{Model: defaultModel}
+func saveConfig(provider, apiKey, model string) error {
+	cfg := Config{Provider: defaultProvider, Model: defaultModel}
 	if existing, err := loadConfig(); err == nil {
 		cfg = *existing
+	}
+	if provider != "" {
+		cfg.Provider = provider
 	}
 	if apiKey != "" {
 		cfg.ApiKey = apiKey
@@ -63,7 +82,11 @@ func saveConfig(apiKey, model string) error {
 		cfg.Model = model
 	}
 
-	if cfg.ApiKey == "" {
+	if !slices.Contains(availableProviders, cfg.Provider) {
+		return fmt.Errorf("invalid provider %q. Valid providers: %s", cfg.Provider, strings.Join(availableProviders, ", "))
+	}
+	// The claude CLI carries its own credentials, so no key to require.
+	if cfg.Provider == providerAPI && cfg.ApiKey == "" {
 		return fmt.Errorf("API key is required. Use --api-key flag to set it")
 	}
 	if !slices.Contains(availableModels, cfg.Model) {
@@ -86,9 +109,17 @@ func saveConfig(apiKey, model string) error {
 	}
 
 	printSuccess("Configuration saved successfully")
-	fmt.Println(Bold + "API Key: " + Reset + maskAPIKey(cfg.ApiKey))
-	fmt.Println(Bold + "Model: " + Reset + cfg.Model)
+	printConfig(cfg)
 	return nil
+}
+
+// printConfig renders a config, hiding the key line where none is used.
+func printConfig(cfg Config) {
+	fmt.Println(Bold + "Provider: " + Reset + cfg.Provider)
+	if cfg.Provider == providerAPI {
+		fmt.Println(Bold + "API Key: " + Reset + maskAPIKey(cfg.ApiKey))
+	}
+	fmt.Println(Bold + "Model: " + Reset + cfg.Model)
 }
 
 // maskAPIKey masks an API key for display.
@@ -103,19 +134,20 @@ func maskAPIKey(k string) string {
 // prints help listing the subcommands.
 var configCmd = &cobra.Command{
 	Use:   "config",
-	Short: "Manage API key and model",
+	Short: "Manage provider, API key and model",
 }
 
 var configSetCmd = &cobra.Command{
 	Use:   "set",
-	Short: "Set API key and/or model",
+	Short: "Set provider, API key and/or model",
 	RunE: func(cmd *cobra.Command, args []string) error {
+		provider, _ := cmd.Flags().GetString("provider")
 		apiKey, _ := cmd.Flags().GetString("api-key")
 		model, _ := cmd.Flags().GetString("model")
-		if apiKey == "" && model == "" {
+		if provider == "" && apiKey == "" && model == "" {
 			return cmd.Help()
 		}
-		return saveConfig(apiKey, model)
+		return saveConfig(provider, apiKey, model)
 	},
 }
 
@@ -128,8 +160,7 @@ var configShowCmd = &cobra.Command{
 			return err
 		}
 		fmt.Println(Bold + Cyan + "Current Configuration:" + Reset)
-		fmt.Println(Bold + "API Key: " + Reset + maskAPIKey(cfg.ApiKey))
-		fmt.Println(Bold + "Model: " + Reset + cfg.Model)
+		printConfig(*cfg)
 		return nil
 	},
 }
@@ -160,6 +191,7 @@ var configModelsCmd = &cobra.Command{
 }
 
 func init() {
+	configSetCmd.Flags().String("provider", "", "How to reach the model: api or claude-code")
 	configSetCmd.Flags().String("api-key", "", "API key for the model provider")
 	configSetCmd.Flags().String("model", "", "Model to use")
 	configCmd.AddCommand(configSetCmd, configShowCmd, configModelsCmd)

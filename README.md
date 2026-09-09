@@ -37,7 +37,10 @@ git clone https://github.com/natrimmer/mango.git && cd mango && go build
 ## Use
 
 ```bash
-mango config set --api-key "sk-ant-..."   # one-time setup
+mango config set --api-key "sk-ant-..."     # one-time setup
+# or, to use your Claude Code login instead of a key:
+mango config set --provider claude-code
+
 git add .
 mango commit                              # shows the message, then commits on confirm
 ```
@@ -51,14 +54,23 @@ On a terminal, `mango commit` prompts and runs `git commit` for you (with `--cou
 | `--type`, `-t <t>` | Force a commit type (`feat`, `fix`, `docs`, …) |
 | `--context`, `-c "<text>"` | Extra context to guide the message (e.g. `"resolves #123"`) |
 | `--count`, `-n <n>` | Offer N options to pick from instead of one |
-| `--dry-run` | Show the prompt without calling the API |
-| `--verbose`, `-v` | Show the prompt (as `--dry-run` does) plus the raw API response |
+| `--dry-run` | Show the prompt without generating a message |
+| `--verbose`, `-v` | Show the prompt (as `--dry-run` does) plus the raw model response |
 
 Other commands: `mango config show` (show config), `mango config models` (list models), `mango --version`.
 
+## Providers
+
+Set with `mango config set --provider <name>`:
+
+- `api` — **default**, calls the Anthropic API directly with the key from `mango config set --api-key`
+- `claude-code` — runs the `claude` CLI on your machine, so it uses whatever Claude Code is already logged in as and mango stores no key
+
+`claude-code` needs `claude` on your `PATH` ([install](https://claude.com/claude-code)). mango runs it with all tools off and outside your repo, so project `CLAUDE.md` files, hooks, and MCP servers don't affect the message.
+
 ## Models
 
-Set with `mango config set --model <name>`:
+Set with `mango config set --model <name>` (both providers accept the same names):
 
 - `claude-opus-5` — most capable, slower, pricier
 - `claude-opus-4-8` — previous Opus
@@ -78,7 +90,7 @@ Messages follow `<type>: <description>` — lowercase, imperative mood, no trail
 <details>
 <summary>Configuration & storage</summary>
 
-Config lives at `~/.mango/config.json`. The API key is stored in **plaintext** — set appropriate file permissions. The key is masked (`sk-a****...`) whenever displayed.
+Config lives at `~/.mango/config.json`. Under the `api` provider the key is stored in **plaintext** — set appropriate file permissions. The key is masked (`sk-a****...`) whenever displayed. The `claude-code` provider stores no key at all.
 
 </details>
 
@@ -91,11 +103,11 @@ Flat `package main` on [Cobra](https://github.com/spf13/cobra), one file per con
 main.go    entrypoint
 root.go    root command, version
 config.go  config + config/view/models commands
-commit.go  prompt building, API call, git helpers, commit command
+commit.go  prompt building, both generation paths, git helpers, commit command
 colors.go  ANSI helpers
 ```
 
-Tests exercise real behavior (temp `HOME` for config, `httptest` for the API) rather than mocks.
+Tests exercise real behavior (temp `HOME` for config, `httptest` for the API, a stub executable for the `claude` CLI) rather than mocks.
 
 The [devenv](https://devenv.sh) shell prints its command menu on entry (run `menu` to see it again): `build`, `test-code`, `test-coverage`, `test-race`, `bench`, `fmt`, `vet`, `lint`, `ci`, `clean`.
 
